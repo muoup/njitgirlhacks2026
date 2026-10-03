@@ -6,6 +6,7 @@ import { Auth } from "./pages/Auth";
 import { Dashboard } from "./pages/Dashboard";
 import { Landing } from "./pages/Landing";
 import { NotBuilt } from "./pages/NotBuilt";
+import { Shed } from "./pages/Shed";
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
         <Route path="/signin" element={<Auth mode="signin" />} />
         <Route path="/signup" element={<Auth mode="signup" />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/shed" element={<Shed />} />
         <Route path="*" element={<NotBuilt />} />
       </Routes>
     </BrowserRouter>

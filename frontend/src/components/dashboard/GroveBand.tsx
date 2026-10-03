@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { GroveSymbols } from "@/components/grove/GroveSymbols";
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { Planted } from "@/components/grove/Scene";
@@ -35,26 +37,17 @@ function Flag({ urgency }: { urgency: Urgency }) {
   );
 }
 
+// The top edge of the ground, in the ground's own 1440 by 60 box.
+const GROUND_EDGE = "0,12 240,3 520,14 820,5 1100,15 1300,6 1440,10";
+
 /**
- * The garden at a glance, as a strip of the grove: one mushroom per plant, standing on the
- * top edge of the page with its latest readings under its name. The aura's colour is the
- * plant's urgency. Choosing a mushroom selects its plant.
+ * A strip of the grove across the top of a page, with the page's own ground along its bottom
+ * edge. `--floor` is how tall that ground is; `children` stand on it. `turf` lays grass along
+ * the edge, for a page whose ground is not the colour of the grove.
  */
-export function GroveBand({
-  plants,
-  overviews,
-  readings,
-  selectedId,
-  onSelect,
-}: {
-  plants: Plant[];
-  overviews: PlantOverview[];
-  readings: Reading[];
-  selectedId: string | null;
-  onSelect: (plantId: string | null) => void;
-}) {
+export function GroveStrip({ className, turf, children }: { className?: string; turf?: boolean; children?: ReactNode }) {
   return (
-    <div className="relative h-[376px] overflow-hidden bg-grove-sky [--floor:92px] sm:h-[330px] sm:[--floor:78px]">
+    <div className={cn("relative h-[376px] overflow-hidden bg-grove-sky [--floor:92px] sm:h-[330px] sm:[--floor:78px]", className)}>
       <GroveSymbols />
 
       {/* Scenery stands on the bottom edge of this box, which is the top of the ground strip. */}
@@ -111,11 +104,38 @@ export function GroveBand({
         aria-hidden="true"
         viewBox="0 0 1440 60"
         preserveAspectRatio="none"
-        className="absolute inset-x-0 bottom-0 h-(--floor) w-full fill-background"
+        className="absolute inset-x-0 bottom-0 h-(--floor) w-full overflow-visible fill-background"
       >
-        <polygon points="0,60 0,12 240,3 520,14 820,5 1100,15 1300,6 1440,10 1440,60" />
+        <polygon points={`0,60 ${GROUND_EDGE} 1440,60`} />
+        {turf && (
+          <polyline points={GROUND_EDGE} fill="none" vectorEffect="non-scaling-stroke" strokeWidth="6" style={{ stroke: "var(--grove-near-1)" }} />
+        )}
       </svg>
+      {children}
+    </div>
+  );
+}
 
+/**
+ * The garden at a glance: one mushroom per plant, standing on the top edge of the page with
+ * its latest readings under its name. The aura's colour is the plant's urgency. Choosing a
+ * mushroom selects its plant.
+ */
+export function GroveBand({
+  plants,
+  overviews,
+  readings,
+  selectedId,
+  onSelect,
+}: {
+  plants: Plant[];
+  overviews: PlantOverview[];
+  readings: Reading[];
+  selectedId: string | null;
+  onSelect: (plantId: string | null) => void;
+}) {
+  return (
+    <GroveStrip>
       <div
         role="group"
         aria-label="Plants in this garden"
@@ -159,6 +179,6 @@ export function GroveBand({
           );
         })}
       </div>
-    </div>
+    </GroveStrip>
   );
 }

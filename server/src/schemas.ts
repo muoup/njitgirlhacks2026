@@ -75,6 +75,17 @@ export const ReadingsResponse = t.Object({
 });
 export const InsightsResponse = t.Object({ insights: Insights, meta: Meta });
 
+const ResourceName = t.String({ minLength: 1, pattern: "\\S" });
+export const NewGarden = t.Object({ name: ResourceName });
+export const NewPlant = t.Object({ name: ResourceName, species: ResourceName });
+export const ApiKey = t.Object({
+  key: t.String({ minLength: 1, description: "Firmware credential issued by the backend; treat as a secret." }),
+  createdAt: Timestamp,
+});
+export const GardenResponse = t.Object({ garden: Garden });
+export const ApiKeyResponse = t.Object({ apiKey: ApiKey });
+export const PlantedResponse = t.Object({ plant: Plant, apiKey: ApiKey });
+
 export type GardenData = Static<typeof Garden>;
 export type PlantData = Static<typeof Plant>;
 export type PlantStatusData = Static<typeof PlantStatus>;
@@ -89,3 +100,8 @@ export type GardensData = Static<typeof GardensResponse>;
 export type ReadingsData = Static<typeof ReadingsResponse>;
 export type InsightsResult = Static<typeof InsightsResponse>;
 export type ReadingRange = Static<typeof ReadingsQuery>;
+export type NewPlantData = Static<typeof NewPlant>;
+export type ApiKeyData = Static<typeof ApiKey>;
+export type GardenResult = Static<typeof GardenResponse>;
+export type ApiKeyResult = Static<typeof ApiKeyResponse>;
+export type PlantedResult = Static<typeof PlantedResponse>;

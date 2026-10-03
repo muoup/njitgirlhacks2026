@@ -39,7 +39,7 @@ export function Plaque({
           clipPath: CUTS[cut % CUTS.length],
         }}
       />
-      <div className="relative h-full bg-[#14271b] p-4 sm:p-5">
+      <div className="relative h-full bg-[var(--plaque-face,#14271b)] p-4 sm:p-5">
         {(title || action) && (
           <header className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
             {title && <h2 className="m-0 font-brush text-3xl leading-none font-normal text-grove-parchment">{title}</h2>}

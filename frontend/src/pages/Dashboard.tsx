@@ -1,7 +1,8 @@
+import { Shovel } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { Link, Navigate, useSearchParams } from "react-router";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 
-import { AccountTag, GardenSign } from "@/components/dashboard/BandHeader";
+import { AccountTag, GardenSign, SideBoard } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
 import { type PlantOverview, standInOverviews, URGENCY, type Urgency } from "@/components/dashboard/overview";
@@ -42,6 +43,7 @@ function stopColor(spec: WidgetSpec, overviews: PlantOverview[]) {
 
 function GardenBody({ view }: { view: DashboardView }) {
   const { dashboard, overviews, selectedId, selectPlant } = view;
+  const navigate = useNavigate();
 
   if (selectedId && !dashboard.plants.some(plant => plant.id === selectedId)) {
     return (
@@ -55,7 +57,9 @@ function GardenBody({ view }: { view: DashboardView }) {
   if (dashboard.plants.length === 0) {
     return (
       <Body>
-        <StateMessage title="Nothing planted here yet.">This garden has no plants.</StateMessage>
+        <StateMessage title="Nothing planted here yet." action={{ label: "Plant something", onClick: () => navigate("/shed") }}>
+          This garden has no plants.
+        </StateMessage>
       </Body>
     );
   }
@@ -111,6 +115,7 @@ function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overv
 
 function SignedIn({ user }: { user: SessionUser }) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const gardenParam = params.get("garden");
   const plantId = params.get("plant");
 
@@ -184,7 +189,16 @@ function SignedIn({ user }: { user: SessionUser }) {
           loam
         </Link>
         {gardenList.length > 0 && (
-          <GardenSign gardens={gardenList} gardenId={garden?.id} onSelect={selectGarden}>
+          <GardenSign
+            gardens={gardenList}
+            gardenId={garden?.id}
+            onSelect={selectGarden}
+            beside={
+              <SideBoard to="/shed" label="Potting shed" short="Shed">
+                <Shovel aria-hidden="true" className="size-5" />
+              </SideBoard>
+            }
+          >
             {loaded && loaded.plants.length > 0 && <Summary dashboard={loaded} overviews={overviews} />}
           </GardenSign>
         )}

@@ -1,0 +1,18 @@
+/* The potting shed is below ground: the page's own tokens, in soil instead of leaf. */
+.shed-soil {
+  --background: #1e160f;
+  --muted: #2a1f15;
+  --muted-foreground: #c9bca6;
+  --border: #47392a;
+  --input: #47392a;
+  --accent: #3a2c1e;
+  --plaque-face: #281d14;
+
+  --soil-hi: #271c13;
+  --soil-lo: #17100a;
+  --stone: #4b4237;
+  --stone-hi: #5f5547;
+  --stone-lo: #383027;
+  --root: #3f2d1b;
+  --root-hi: #523c25;
+}

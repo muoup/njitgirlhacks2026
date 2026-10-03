@@ -1,6 +1,7 @@
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { ChevronDown, LogOut } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Link } from "react-router";
 
 import { Select, SelectContent, SelectItem } from "@/components/ui/select";
 import type { Garden } from "@/lib/api";
@@ -8,43 +9,62 @@ import type { SessionUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const WOOD = "linear-gradient(182deg, var(--grove-wood-hi) 50%, var(--grove-wood) 50%)";
-const FOCUS = "outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-grove-ember-hi";
+export const FOCUS = "outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-grove-ember-hi";
 
 /** A cut plank behind its content. Separate from the content so focus outlines are not clipped with it. */
-function Plank({ cut }: { cut: string }) {
+export function Plank({ cut }: { cut: string }) {
   return <span aria-hidden="true" className="absolute inset-0 -z-10" style={{ background: WOOD, clipPath: cut }} />;
 }
 
+const BOARD =
+  "grove-board relative isolate flex min-w-0 items-center gap-2 px-6 py-2.5 font-brush text-2xl leading-none font-normal text-grove-parchment sm:px-8 sm:text-3xl";
+const BOARD_TILT = { "--tilt": "-1.2deg", "--nudge": "0px" } as CSSProperties;
+const BOARD_CUT = "polygon(0 8%, 98% 0, 100% 90%, 2% 100%)";
+
 /**
- * The garden's name on a board hanging from the top of the grove. Choosing it lets down the
- * other gardens. `children` is the line under the board.
+ * A board hanging on two ropes from the top centre of the grove. `beside` is a small board
+ * hung next to it, and `children` is the line under it.
  */
+function Hanging({ board, beside, children }: { board: ReactNode; beside?: ReactNode; children?: ReactNode }) {
+  return (
+    // On a phone the board hangs lower, under the wordmark and the name tag, so it can use the full width.
+    <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center px-4 sm:px-44">
+      {/* Kept narrower than the row on a phone, which leaves room for the small board beside it. */}
+      <div className={cn("pointer-events-auto relative max-w-full pt-14 sm:pt-5", beside && "max-sm:max-w-[calc(100%-7rem)]")}>
+        {["left-[18%]", "right-[18%]"].map(side => (
+          <span key={side} aria-hidden="true" className={cn("absolute top-0 h-[3.75rem] w-0.5 bg-[#8a7355] sm:h-6", side)} />
+        ))}
+        {board}
+        {beside && <div className="absolute bottom-0.5 left-full ml-3">{beside}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** The garden's name on the hanging board. Choosing it lets down the other gardens. */
 export function GardenSign({
   gardens,
   gardenId,
   onSelect,
+  beside,
   children,
 }: {
   gardens: Garden[];
   gardenId: string | undefined;
   onSelect: (gardenId: string) => void;
+  beside?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    // On a phone the board hangs lower, under the wordmark and the name tag, so it can use the full width.
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center px-4 sm:px-44">
-      <div className="pointer-events-auto relative max-w-full pt-14 sm:pt-5">
-        {["left-[18%]", "right-[18%]"].map(side => (
-          <span key={side} aria-hidden="true" className={cn("absolute top-0 h-[3.75rem] w-0.5 bg-[#8a7355] sm:h-6", side)} />
-        ))}
+    <Hanging
+      beside={beside}
+      board={
         <Select value={gardenId ?? ""} onValueChange={onSelect}>
           {/* The tilt is on the board inside, not the trigger: the list is placed against the trigger's box, which has to keep still. */}
           <SelectPrimitive.Trigger aria-label="Garden" className={cn("flex max-w-full cursor-pointer border-0 bg-transparent p-0", FOCUS)}>
-            <span
-              className="grove-board relative isolate flex min-w-0 items-center gap-2 px-6 py-2.5 font-brush text-2xl leading-none text-grove-parchment sm:px-8 sm:text-3xl"
-              style={{ "--tilt": "-1.2deg", "--nudge": "0px" } as CSSProperties}
-            >
-              <Plank cut="polygon(0 8%, 98% 0, 100% 90%, 2% 100%)" />
+            <span className={BOARD} style={BOARD_TILT}>
+              <Plank cut={BOARD_CUT} />
               <span className="truncate">
                 <SelectPrimitive.Value placeholder="Choose a garden" />
               </span>
@@ -65,9 +85,50 @@ export function GardenSign({
             ))}
           </SelectContent>
         </Select>
-      </div>
+      }
+    >
       {children}
-    </div>
+    </Hanging>
+  );
+}
+
+/** A page's name on the hanging board, as its heading. */
+export function TitleSign({ title, beside, children }: { title: string; beside?: ReactNode; children?: ReactNode }) {
+  return (
+    <Hanging
+      beside={beside}
+      board={
+        <h1 className={cn(BOARD, "m-0")} style={BOARD_TILT}>
+          <Plank cut={BOARD_CUT} />
+          {title}
+        </h1>
+      }
+    >
+      {children}
+    </Hanging>
+  );
+}
+
+/**
+ * A small board on its own rope beside the sign, leading to another page. Only the icon
+ * shows on narrow screens; `label` is always its name, and `short` is the word painted on it.
+ */
+export function SideBoard({ to, label, short, children }: { to: string; label: string; short: string; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      aria-label={label}
+      className={cn(
+        "grove-board relative isolate flex items-center gap-1.5 px-3 py-2 font-brush text-xl leading-none text-grove-parchment no-underline",
+        FOCUS,
+      )}
+      style={{ "--tilt": "2.5deg", "--nudge": "0px" } as CSSProperties}
+    >
+      <span aria-hidden="true" className="absolute bottom-full left-1/2 -z-10 h-40 w-0.5 bg-[#8a7355]" />
+      <Plank cut="polygon(0 0, 97% 6%, 100% 100%, 3% 92%)" />
+      {children}
+      <span className="hidden md:inline">{short}</span>
+    </Link>
   );
 }
 
