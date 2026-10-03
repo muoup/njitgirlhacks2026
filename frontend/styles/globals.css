@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./fonts.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Nunito Variable", "Segoe UI", Helvetica, sans-serif;
+  --font-brush: "Caveat Brush", "Segoe Print", cursive;
+  --color-grove-sky: var(--grove-sky);
+  --color-grove-front: var(--grove-front);
+  --color-grove-ember: var(--grove-ember);
+  --color-grove-ember-hi: var(--grove-ember-hi);
+  --color-grove-parchment: var(--grove-parchment);
+  --color-grove-mist: var(--grove-mist);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* Night grove palette. The site has one theme; `dark` is set on <html> so shadcn's dark: variants apply. */
+  --background: #0f2118;
+  --foreground: #e8eee2;
+  --card: #1c3224;
+  --card-foreground: #e8eee2;
+  --popover: #223a2a;
+  --popover-foreground: #e8eee2;
+  --primary: #e3ab76;
+  --primary-foreground: #20140a;
+  --secondary: #223a2a;
+  --secondary-foreground: #e8eee2;
+  --muted: #192e21;
+  --muted-foreground: #b4c2b4;
+  --accent: #2a4d36;
+  --accent-foreground: #e8eee2;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #34503d;
+  --input: #34503d;
+  --ring: #f6dcae;
+  --chart-1: #a3d48e;
+  --chart-2: #e3ab76;
+  --chart-3: #c07252;
+  --chart-4: #f3ead2;
+  --chart-5: #93a596;
+  --sidebar: #15281c;
+  --sidebar-foreground: #e8eee2;
+  --sidebar-primary: #e3ab76;
+  --sidebar-primary-foreground: #20140a;
+  --sidebar-accent: #223a2a;
+  --sidebar-accent-foreground: #e8eee2;
+  --sidebar-border: #34503d;
+  --sidebar-ring: #f6dcae;
+
+  /* Scene tones, back to front. Each depth has a base, a lighter and a darker facet. */
+  --grove-sky: #0f2118;
+  --grove-haze: #13291d;
+  --grove-moon: #e6ead0;
+  --grove-far-1: #183324;
+  --grove-far-2: #1c3a29;
+  --grove-far-3: #152d20;
+  --grove-mid-1: #1f3d2b;
+  --grove-mid-2: #264834;
+  --grove-mid-3: #1a3425;
+  --grove-near-1: #28492f;
+  --grove-near-2: #305739;
+  --grove-near-3: #213d28;
+  --grove-front: #0b1810;
+  --grove-ember: #e3ab76;
+  --grove-ember-hi: #f6dcae;
+  --grove-parchment: #f3ead2;
+  --grove-mist: #c9d4c6;
+  --grove-wood: #5a432e;
+  --grove-wood-hi: #6a5038;
+  --grove-wood-lo: #47341f;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
