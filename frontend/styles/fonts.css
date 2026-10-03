@@ -1,0 +1,16 @@
+/* Latin subsets only, served from the bundle so the demo does not depend on a font CDN. */
+@font-face {
+  font-family: "Caveat Brush";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/caveat-brush/files/caveat-brush-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Nunito Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 1000;
+  src: url("@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2") format("woff2-variations");
+}

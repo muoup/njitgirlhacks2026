@@ -1,0 +1,211 @@
+/* Depth tones: each layer sets --t1..3 and the shared symbols pick them up through <use>. */
+.grove-far {
+  --t1: var(--grove-far-1);
+  --t2: var(--grove-far-2);
+  --t3: var(--grove-far-3);
+}
+
+.grove-mid {
+  --t1: var(--grove-mid-1);
+  --t2: var(--grove-mid-2);
+  --t3: var(--grove-mid-3);
+}
+
+.grove-near {
+  --t1: var(--grove-near-1);
+  --t2: var(--grove-near-2);
+  --t3: var(--grove-near-3);
+}
+
+.grove-t1 {
+  fill: var(--t1);
+}
+
+.grove-t2 {
+  fill: var(--t2);
+}
+
+.grove-t3 {
+  fill: var(--t3);
+}
+
+/* Parallax: --px / --py run from -0.5 to 0.5 and are set by driftWithPointer. */
+.grove-drift {
+  transition: transform 0.5s ease-out;
+  transform: translate3d(calc(var(--px, 0) * var(--dx) * -1px), calc(var(--py, 0) * var(--dy) * -1px), 0);
+}
+
+/* Layers overhang the sides so drifting never uncovers an edge. */
+.grove-layer {
+  position: absolute;
+  inset: 0 -60px;
+}
+
+.grove-layer > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.grove-sway {
+  animation: grove-sway 6s ease-in-out infinite alternate;
+}
+
+.grove-glow {
+  animation: grove-breathe 3.6s ease-in-out infinite alternate;
+}
+
+.grove-flutter {
+  animation: grove-flutter 0.19s ease-in-out infinite alternate;
+}
+
+.grove-float-a {
+  animation: grove-float-a 22s ease-in-out infinite;
+}
+
+.grove-float-b {
+  animation: grove-float-b 26s ease-in-out infinite;
+}
+
+.grove-float-c {
+  animation: grove-float-c 30s ease-in-out infinite;
+}
+
+.grove-firefly {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f3e6a8;
+  box-shadow: 0 0 8px 3px rgb(232 194 106 / 0.4);
+  animation:
+    grove-wander 11s ease-in-out infinite alternate,
+    grove-blink 3.2s ease-in-out infinite alternate;
+}
+
+/*
+ * The signpost is HTML, so it is placed with the stage's own scale: --u is the size of one
+ * stage unit (the layers are 120px wider than the page and at least 640px tall). It is sized
+ * in em so the boards grow and shrink with the scene.
+ */
+.grove-signpost {
+  --u: max(calc((100vw + 120px) / 1440), calc(max(100svh, 640px) / 900));
+  position: absolute;
+  bottom: 0;
+  width: 20em;
+  font-size: clamp(13px, calc(16 * var(--u)), 28px);
+  /* Narrow screens: the post stands between the first two mushrooms, boards above them. */
+  left: calc(50% - 12 * var(--u) - 9.8em);
+  height: calc(300 * var(--u) + 9.5em);
+}
+
+/* Wide screens: the post stands in the clearing to the left of the mushrooms. */
+@media (min-aspect-ratio: 5/4) {
+  .grove-signpost {
+    left: calc(50% - 390 * var(--u) - 9.8em);
+    height: calc(340 * var(--u));
+  }
+}
+
+.grove-board {
+  transform: rotate(var(--tilt));
+  transition: transform 0.2s ease-out;
+}
+
+.grove-board:hover,
+.grove-board:focus-visible {
+  transform: rotate(calc(var(--tilt) / 3)) translateX(var(--nudge));
+}
+
+@keyframes grove-sway {
+  from {
+    transform: rotate(-0.7deg);
+  }
+  to {
+    transform: rotate(0.7deg);
+  }
+}
+
+@keyframes grove-breathe {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes grove-blink {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes grove-wander {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(42px, -30px);
+  }
+}
+
+@keyframes grove-flutter {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes grove-float-a {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(60px, -36px);
+  }
+  45% {
+    transform: translate(130px, 8px);
+  }
+  70% {
+    transform: translate(70px, 46px);
+  }
+}
+
+@keyframes grove-float-b {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-50px, 30px);
+  }
+  50% {
+    transform: translate(-110px, -10px);
+  }
+  75% {
+    transform: translate(-40px, -50px);
+  }
+}
+
+@keyframes grove-float-c {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  30% {
+    transform: translate(40px, 50px);
+  }
+  55% {
+    transform: translate(-30px, 80px);
+  }
+  80% {
+    transform: translate(-60px, 20px);
+  }
+}

@@ -1,9 +1,18 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./fonts.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: "Nunito Variable", "Segoe UI", Helvetica, sans-serif;
+  --font-brush: "Caveat Brush", "Segoe Print", cursive;
+  --color-grove-sky: var(--grove-sky);
+  --color-grove-front: var(--grove-front);
+  --color-grove-ember: var(--grove-ember);
+  --color-grove-ember-hi: var(--grove-ember-hi);
+  --color-grove-parchment: var(--grove-parchment);
+  --color-grove-mist: var(--grove-mist);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -43,71 +52,61 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Night grove palette. The site has one theme; `dark` is set on <html> so shadcn's dark: variants apply. */
+  --background: #0f2118;
+  --foreground: #e8eee2;
+  --card: #1c3224;
+  --card-foreground: #e8eee2;
+  --popover: #223a2a;
+  --popover-foreground: #e8eee2;
+  --primary: #e3ab76;
+  --primary-foreground: #20140a;
+  --secondary: #223a2a;
+  --secondary-foreground: #e8eee2;
+  --muted: #192e21;
+  --muted-foreground: #b4c2b4;
+  --accent: #2a4d36;
+  --accent-foreground: #e8eee2;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: #34503d;
+  --input: #34503d;
+  --ring: #f6dcae;
+  --chart-1: #a3d48e;
+  --chart-2: #e3ab76;
+  --chart-3: #c07252;
+  --chart-4: #f3ead2;
+  --chart-5: #93a596;
+  --sidebar: #15281c;
+  --sidebar-foreground: #e8eee2;
+  --sidebar-primary: #e3ab76;
+  --sidebar-primary-foreground: #20140a;
+  --sidebar-accent: #223a2a;
+  --sidebar-accent-foreground: #e8eee2;
+  --sidebar-border: #34503d;
+  --sidebar-ring: #f6dcae;
+
+  /* Scene tones, back to front. Each depth has a base, a lighter and a darker facet. */
+  --grove-sky: #0f2118;
+  --grove-haze: #13291d;
+  --grove-moon: #e6ead0;
+  --grove-far-1: #183324;
+  --grove-far-2: #1c3a29;
+  --grove-far-3: #152d20;
+  --grove-mid-1: #1f3d2b;
+  --grove-mid-2: #264834;
+  --grove-mid-3: #1a3425;
+  --grove-near-1: #28492f;
+  --grove-near-2: #305739;
+  --grove-near-3: #213d28;
+  --grove-front: #0b1810;
+  --grove-ember: #e3ab76;
+  --grove-ember-hi: #f6dcae;
+  --grove-parchment: #f3ead2;
+  --grove-mist: #c9d4c6;
+  --grove-wood: #5a432e;
+  --grove-wood-hi: #6a5038;
+  --grove-wood-lo: #47341f;
 }
 
 @layer base {
