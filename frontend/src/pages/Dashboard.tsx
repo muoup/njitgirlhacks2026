@@ -1,4 +1,4 @@
-import { Shovel } from "lucide-react";
+import { MessageCircle, Shovel } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 
@@ -194,6 +194,11 @@ function SignedIn({ user }: { user: SessionUser }) {
             gardens={gardenList}
             gardenId={garden?.id}
             onSelect={selectGarden}
+            opposite={
+              <SideBoard to="/mentor" label="Ask the mentor" short="Mentor" tilt="-2.5deg">
+                <MessageCircle aria-hidden="true" className="size-5" />
+              </SideBoard>
+            }
             beside={
               <SideBoard to="/shed" label="Potting shed" short="Shed">
                 <Shovel aria-hidden="true" className="size-5" />

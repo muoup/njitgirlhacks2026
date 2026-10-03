@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import { Auth } from "./pages/Auth";
 import { Dashboard } from "./pages/Dashboard";
 import { Landing } from "./pages/Landing";
+import { Mentor } from "./pages/Mentor";
 import { NotBuilt } from "./pages/NotBuilt";
 import { Shed } from "./pages/Shed";
 
@@ -17,6 +18,7 @@ export function App() {
         <Route path="/signup" element={<Auth mode="signup" />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/shed" element={<Shed />} />
+        <Route path="/mentor" element={<Mentor />} />
         <Route path="*" element={<NotBuilt />} />
       </Routes>
     </BrowserRouter>

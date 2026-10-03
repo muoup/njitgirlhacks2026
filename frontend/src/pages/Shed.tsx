@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, MessageCircle, Plus } from "lucide-react";
 import { type CSSProperties, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 
@@ -92,6 +92,11 @@ function SignedIn({ user }: { user: SessionUser }) {
         </Link>
         <TitleSign
           title="Potting shed"
+          opposite={
+            <SideBoard to="/mentor" label="Ask the mentor" short="Mentor" tilt="-2.5deg">
+              <MessageCircle aria-hidden="true" className="size-5" />
+            </SideBoard>
+          }
           beside={
             <SideBoard to="/dashboard" label="Back to the garden" short="Garden">
               <ArrowLeft aria-hidden="true" className="size-5" />

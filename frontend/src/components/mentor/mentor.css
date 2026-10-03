@@ -1,0 +1,29 @@
+/*
+ * The mentors stand behind the chat board and look over its top edge. The one answering is
+ * up; the other has dropped behind the board, which hides it. Changing who answers drops one
+ * quickly and then brings the other up with a small bounce.
+ */
+.mentor-figure {
+  /* Its own height, less what was already behind the board, and a little more to clear the board's cut edge. */
+  transform: translateY(calc(100% - 0.5rem));
+  transition: transform 0.3s cubic-bezier(0.55, 0, 0.9, 0.45);
+}
+
+.mentor-figure[data-up="true"] {
+  transform: translateY(0);
+  transition: transform 0.55s cubic-bezier(0.3, 1.5, 0.6, 1) 0.26s;
+}
+
+/* A slow nod while they wait, turning about the feet. */
+.mentor-idle {
+  animation: mentor-idle 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes mentor-idle {
+  from {
+    transform: rotate(-1.2deg);
+  }
+  to {
+    transform: rotate(1.2deg);
+  }
+}
