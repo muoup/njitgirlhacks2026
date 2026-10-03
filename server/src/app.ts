@@ -28,6 +28,17 @@ export async function createApp(options: {
 } = {}) {
   const config = options.config ?? loadConfig();
   const backend = options.backend ?? new MockBackend();
+  async function requireGarden(identity: BackendIdentity, gardenId: string) {
+    const { gardens } = await backend.listGardens(identity);
+    if (!gardens.some(garden => garden.id === gardenId)) {
+      throw new ApiError(404, "NOT_FOUND", "Garden not found.");
+    }
+  }
+  async function requirePlant(identity: BackendIdentity, plantId: string) {
+    if (!await backend.hasPlant(identity, plantId)) {
+      throw new ApiError(404, "NOT_FOUND", "Plant not found.");
+    }
+  }
   if (config.production && !options.backend) {
     throw new Error("Configure the real backend adapter before running in production.");
   }
@@ -69,7 +80,7 @@ export async function createApp(options: {
     .use(cors({
       origin: config.frontendOrigins,
       credentials: true,
-      methods: ["GET", "POST", "OPTIONS"],
+      methods: ["GET", "POST", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type"],
     }))
     .onError(({ code, error, set }) => {
@@ -88,6 +99,20 @@ export async function createApp(options: {
       set.status = 500;
       console.error("BFF request failed", error);
       return { error: { code: "INTERNAL_ERROR", message: "The request could not be completed." } };
+    })
+    .onAfterHandle(({ request, response }) => {
+      if (new URL(request.url).pathname !== "/openapi/json") return;
+      // The installed OpenAPI generator emits `content: { type: "void" }`
+      // for t.Void(). A 204 response has no content in the OpenAPI document.
+      const spec = response as { paths?: Record<string, Record<string, {
+        responses?: Record<string, { content?: unknown }>;
+      }>> };
+      for (const path of Object.values(spec.paths ?? {})) {
+        for (const operation of Object.values(path)) {
+          const noContent = operation.responses?.["204"];
+          if (noContent) delete noContent.content;
+        }
+      }
     })
     .use(openapi({ documentation }))
     // Forward the original URL/body; mounting at a prefix would strip the
@@ -127,6 +152,49 @@ export async function createApp(options: {
         response: { 200: s.GardensResponse },
         detail: { tags: ["Gardens"], summary: "List the account's gardens", operationId: "listGardens" },
       })
+      .post("/gardens", () => {
+        throw new ApiError(501, "NOT_IMPLEMENTED", "Garden creation awaits the backend protocol.");
+      }, {
+        body: s.NewGarden,
+        response: { 201: s.GardenResponse, 501: s.ErrorResponse },
+        detail: {
+          tags: ["Gardens"], summary: "Create a garden (reserved)", operationId: "createGarden",
+          description: "Validates the request, then returns 501 without creating a garden. Future success returns 201.",
+        },
+      })
+      .delete("/gardens/:id", async ({ identity, params }) => {
+        await requireGarden(identity, params.id);
+        throw new ApiError(501, "NOT_IMPLEMENTED", "Garden removal awaits the backend protocol.");
+      }, {
+        params: t.Object({ id: s.Id }),
+        response: { 204: t.Void(), 501: s.ErrorResponse },
+        detail: {
+          tags: ["Gardens"], summary: "Remove a garden (reserved)", operationId: "removeGarden",
+          description: "Checks account ownership, then returns 501 without changes. Future success returns 204 and removes the garden's plants, readings, and keys; backend cascade semantics are pending.",
+        },
+      })
+      .post("/gardens/:id/plants", async ({ identity, params }) => {
+        await requireGarden(identity, params.id);
+        throw new ApiError(501, "NOT_IMPLEMENTED", "Plant creation awaits the backend protocol.");
+      }, {
+        params: t.Object({ id: s.Id }), body: s.NewPlant,
+        response: { 201: s.PlantedResponse, 501: s.ErrorResponse },
+        detail: {
+          tags: ["Provisioning"], summary: "Create a plant with a firmware key (reserved)", operationId: "createPlant",
+          description: "Validates the request and garden ownership, then returns 501. Future success returns 201 with the plant and a backend-issued API key; no plant or key is created here.",
+        },
+      })
+      .delete("/plants/:id", async ({ identity, params }) => {
+        await requirePlant(identity, params.id);
+        throw new ApiError(501, "NOT_IMPLEMENTED", "Plant removal awaits the backend protocol.");
+      }, {
+        params: t.Object({ id: s.Id }),
+        response: { 204: t.Void(), 501: s.ErrorResponse },
+        detail: {
+          tags: ["Provisioning"], summary: "Remove a plant (reserved)", operationId: "removePlant",
+          description: "Checks account ownership, then returns 501 without changes. Future success returns 204; backend cleanup and key revocation semantics are pending.",
+        },
+      })
       .get("/dashboard", async ({ identity, query }) => {
         const dashboard = await backend.hydrateDashboard(identity, query.gardenId);
         if (!dashboard) throw new ApiError(404, "NOT_FOUND", "Garden not found.");
@@ -150,7 +218,7 @@ export async function createApp(options: {
         response: { 200: s.ReadingsResponse },
         detail: {
           tags: ["Readings"], summary: "Read a plant's numerical history",
-          description: "Required UTC/offset timestamps, inclusive range, maximum seven days. Mock data is sampled hourly; backend sampling is TBD.",
+          description: "Required UTC/offset timestamps, inclusive range, maximum seven days. Mock data includes reported hourly samples with a four-minute reporting delay; backend sampling is TBD.",
           operationId: "getPlantReadings",
         },
       })
@@ -165,14 +233,26 @@ export async function createApp(options: {
           description: "Does not call Gemini or schedule generation. Freshness policy is TBD.",
         },
       })
-      .post("/plants/:id/api-keys", async ({ identity, params }) => {
-        if (!await backend.hasPlant(identity, params.id)) throw new ApiError(404, "NOT_FOUND", "Plant not found.");
+      .get("/plants/:id/api-keys", async ({ identity, params, set }) => {
+        set.headers["Cache-Control"] = "no-store";
+        await requirePlant(identity, params.id);
+        throw new ApiError(501, "NOT_IMPLEMENTED", "Plant API-key retrieval awaits the backend protocol.");
+      }, {
+        params: t.Object({ id: s.Id }), response: { 200: s.ApiKeyResponse, 501: s.ErrorResponse },
+        detail: {
+          tags: ["Provisioning"], summary: "Retrieve a plant API key (reserved)", operationId: "getPlantApiKey",
+          description: "Checks account ownership, then returns 501. Future success returns a secret with Cache-Control: no-store. Backend key storage and whether existing secrets can be retrieved are TBD.",
+        },
+      })
+      .post("/plants/:id/api-keys", async ({ identity, params, set }) => {
+        set.headers["Cache-Control"] = "no-store";
+        await requirePlant(identity, params.id);
         throw new ApiError(501, "NOT_IMPLEMENTED", "Plant API-key issuance awaits the backend protocol.");
       }, {
-        params: t.Object({ id: s.Id }), response: { 501: s.ErrorResponse },
+        params: t.Object({ id: s.Id }), response: { 200: s.ApiKeyResponse, 501: s.ErrorResponse },
         detail: {
-          tags: ["Provisioning"], summary: "Request a plant API key (reserved)", operationId: "requestPlantApiKey",
-          description: "Placeholder only. The backend will issue firmware API keys; the BFF never generates keys here.",
+          tags: ["Provisioning"], summary: "Replace a plant API key (reserved)", operationId: "replacePlantApiKey",
+          description: "Checks account ownership, then returns 501 without issuing or revoking keys. Future success returns a backend-issued key with Cache-Control: no-store and invalidates the old credential.",
         },
       }),
     ));

@@ -1,14 +1,16 @@
-import { LogOut } from "lucide-react";
-import type { ReactNode } from "react";
-import { Link, Navigate, useSearchParams } from "react-router";
+import { Shovel } from "lucide-react";
+import { type ReactNode, useMemo } from "react";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 
+import { AccountTag, GardenSign, SideBoard } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
-import { defaultLayout } from "@/components/dashboard/layout";
+import { ForestFloor } from "@/components/dashboard/ForestFloor";
+import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
+import { type PlantOverview, standInOverviews, URGENCY, type Urgency } from "@/components/dashboard/overview";
 import { Skeleton, StateMessage } from "@/components/dashboard/Panel";
-import { followUps } from "@/components/dashboard/view";
+import { Trail } from "@/components/dashboard/Trail";
+import { type DashboardView, lastHeardAt } from "@/components/dashboard/view";
 import { Widget } from "@/components/dashboard/Widget";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, ApiError, type DashboardResponse, type Garden } from "@/lib/api";
 import { auth, type SessionUser } from "@/lib/auth";
 import { timeAgo } from "@/lib/format";
@@ -19,33 +21,32 @@ function isStatus(error: unknown, status: number) {
 }
 
 function Body({ children }: { children: ReactNode }) {
-  return <main className="mx-auto w-full max-w-6xl px-5 pt-6 pb-16 sm:px-8">{children}</main>;
+  return <main className="mx-auto w-full max-w-5xl px-5 pb-16 sm:px-8">{children}</main>;
 }
 
 function LoadingBody() {
   return (
     <Body>
-      <div role="status" aria-label="Loading the garden" className="grid gap-6 lg:grid-cols-3">
-        <Skeleton className="h-44 lg:col-span-3" />
-        <Skeleton className="h-64 lg:col-span-2" />
-        <Skeleton className="h-64" />
+      <div role="status" aria-label="Loading the garden" className="grid gap-10 pt-16">
+        <Skeleton className="h-56 lg:w-[82%]" />
+        <Skeleton className="h-40 lg:ml-auto lg:w-[82%]" />
       </div>
     </Body>
   );
 }
 
-function GardenBody({
-  dashboard,
-  plantId,
-  selectPlant,
-}: {
-  dashboard: DashboardResponse;
-  plantId: string | null;
-  selectPlant: (plantId: string | null) => void;
-}) {
-  const view = { dashboard, selectPlant };
+/** The stone marking a stop takes the colour of the plant the stop is about. */
+function stopColor(spec: WidgetSpec, overviews: PlantOverview[]) {
+  if (spec.type !== "plant") return undefined;
+  const urgency = overviews.find(overview => overview.plantId === spec.plantId)?.urgency;
+  return urgency ? URGENCY[urgency].color : undefined;
+}
 
-  if (plantId && !dashboard.plants.some(plant => plant.id === plantId)) {
+function GardenBody({ view }: { view: DashboardView }) {
+  const { dashboard, overviews, selectedId, selectPlant } = view;
+  const navigate = useNavigate();
+
+  if (selectedId && !dashboard.plants.some(plant => plant.id === selectedId)) {
     return (
       <Body>
         <StateMessage title="That plant isn't here." action={{ label: "Show the whole garden", onClick: () => selectPlant(null) }}>
@@ -57,19 +58,23 @@ function GardenBody({
   if (dashboard.plants.length === 0) {
     return (
       <Body>
-        <StateMessage title="Nothing planted here yet.">This garden has no plants.</StateMessage>
+        <StateMessage title="Nothing planted here yet." action={{ label: "Plant something", onClick: () => navigate("/shed") }}>
+          This garden has no plants.
+        </StateMessage>
       </Body>
     );
   }
 
   return (
     <Body>
-      <div className="grid gap-x-6 gap-y-8 lg:grid-cols-3">
-        {defaultLayout(dashboard, plantId).map((spec, index) => (
-          <Widget key={`${spec.type}-${index}`} spec={spec} view={view} />
-        ))}
-      </div>
-      <p className="mt-12 mb-0 text-xs text-muted-foreground">
+      <Trail
+        stops={defaultLayout(dashboard, overviews, selectedId).map((spec, index) => ({
+          key: `${spec.type}-${index}`,
+          color: stopColor(spec, overviews),
+          node: <Widget spec={spec} index={index} view={view} />,
+        }))}
+      />
+      <p className="mt-14 mb-0 text-xs text-muted-foreground">
         {dashboard.meta.source === "mock" && "Sample data, not live sensor readings or generated insights. "}
         Updated {timeAgo(dashboard.meta.hydratedAt)}.
       </p>
@@ -77,8 +82,41 @@ function GardenBody({
   );
 }
 
+const TALLY: { urgency: Urgency; one: string; many: string }[] = [
+  { urgency: "act", one: "needs you", many: "need you" },
+  { urgency: "watch", one: "to check on", many: "to check on" },
+];
+
+/** The line under the garden sign: how many plants want something, and how fresh the numbers are. */
+function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overviews: PlantOverview[] }) {
+  const counts = TALLY.map(entry => ({ ...entry, count: overviews.filter(overview => overview.urgency === entry.urgency).length }))
+    .filter(entry => entry.count > 0);
+  const assessed = overviews.some(overview => overview.urgency !== null);
+  const heard = lastHeardAt(dashboard);
+
+  return (
+    <p className="pointer-events-auto mt-3 mb-0 flex flex-wrap items-center justify-center gap-x-3 rounded-2xl bg-grove-sky/70 px-3.5 py-1 text-center text-sm font-bold text-grove-mist backdrop-blur-sm">
+      {counts.map(entry => (
+        <span key={entry.urgency} className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className="size-2.5 rotate-45" style={{ background: URGENCY[entry.urgency].color }} />
+          {entry.count} {entry.count === 1 ? entry.one : entry.many}
+        </span>
+      ))}
+      {counts.length === 0 && assessed && (
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className="size-2.5 rotate-45 bg-grove-ok" />
+          Nothing needs you
+        </span>
+      )}
+      {heard && <span className="font-normal">heard {timeAgo(heard)}</span>}
+      {counts.length === 0 && !assessed && !heard && <span className="font-normal">No readings yet</span>}
+    </p>
+  );
+}
+
 function SignedIn({ user }: { user: SessionUser }) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const gardenParam = params.get("garden");
   const plantId = params.get("plant");
 
@@ -87,6 +125,7 @@ function SignedIn({ user }: { user: SessionUser }) {
   const garden = gardenParam ? gardenList.find(item => item.id === gardenParam) : gardenList[0];
   const dashboard = useResource(garden ? () => api.getDashboard(garden.id) : null, [garden?.id]);
   const loaded = dashboard.resource.status === "ready" ? dashboard.resource.data : null;
+  const overviews = useMemo(() => (loaded ? standInOverviews(loaded) : []), [loaded]);
 
   const selectGarden = (id: string) => setParams({ garden: id });
   const selectPlant = (id: string | null) =>
@@ -134,51 +173,48 @@ function SignedIn({ user }: { user: SessionUser }) {
   } else if (!loaded) {
     body = <LoadingBody />;
   } else {
-    body = <GardenBody dashboard={loaded} plantId={plantId} selectPlant={selectPlant} />;
+    body = <GardenBody view={{ dashboard: loaded, overviews, selectedId: plantId, selectPlant }} />;
   }
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
+    <div className="flex min-h-svh flex-col overflow-x-clip bg-background text-foreground">
       <div className="relative">
         <GroveBand
           plants={loaded?.plants ?? []}
+          overviews={overviews}
+          readings={loaded?.latestReadings ?? []}
           selectedId={plantId}
-          followUpIds={new Set(loaded ? followUps(loaded).flatMap(item => item.plantId ?? []) : [])}
           onSelect={selectPlant}
         />
-        <header className="absolute inset-x-0 top-0 flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 sm:px-8">
-          <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
-            loam
-          </Link>
-          {gardenList.length > 0 && (
-            <Select value={garden?.id ?? ""} onValueChange={selectGarden}>
-              <SelectTrigger aria-label="Garden" className="bg-grove-sky/70 font-bold backdrop-blur-sm dark:bg-grove-sky/70">
-                <SelectValue placeholder="Choose a garden" />
-              </SelectTrigger>
-              <SelectContent>
-                {gardenList.map(item => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            <span className="hidden text-sm text-grove-mist sm:inline">{user.name}</span>
-            <Button variant="ghost" size="sm" onClick={() => auth.signOut().catch(() => {})}>
-              <LogOut />
-              Sign out
-            </Button>
-          </div>
-        </header>
+        <Link to="/" className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
+          loam
+        </Link>
+        {gardenList.length > 0 && (
+          <GardenSign
+            gardens={gardenList}
+            gardenId={garden?.id}
+            onSelect={selectGarden}
+            beside={
+              <SideBoard to="/shed" label="Potting shed" short="Shed">
+                <Shovel aria-hidden="true" className="size-5" />
+              </SideBoard>
+            }
+          >
+            {loaded && loaded.plants.length > 0 && <Summary dashboard={loaded} overviews={overviews} />}
+          </GardenSign>
+        )}
+        <AccountTag user={user} onSignOut={() => auth.signOut().catch(() => {})} />
       </div>
-      {body}
+      {/* Isolated so the forest floor can lie behind the stops without slipping behind the page. */}
+      <div className="relative isolate flex-1">
+        <ForestFloor />
+        {body}
+      </div>
     </div>
   );
 }
 
-/** Signed-in home: the grove band for one garden, then whatever widgets the layout lists. */
+/** Signed-in home: the grove band for one garden, then whatever widgets the layout lists, along a trail. */
 export function Dashboard() {
   const session = auth.useSession();
   if (session.status === "loading") return <div role="status" aria-label="Loading" className="min-h-svh bg-background" />;

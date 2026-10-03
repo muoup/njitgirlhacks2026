@@ -6,7 +6,7 @@ import { Scene } from "@/components/grove/Scene";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { auth, isFixtureAuth } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type Mode = "signin" | "signup";
@@ -158,11 +158,6 @@ function AuthForm({ mode }: { mode: Mode }) {
         </Link>
       </p>
 
-      {isFixtureAuth && (
-        <p className="mt-4 mb-0 border-t pt-4 text-center text-xs text-muted-foreground">
-          Sample mode: no server is connected, so any email and password will let you in.
-        </p>
-      )}
     </>
   );
 }

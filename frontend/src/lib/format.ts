@@ -27,3 +27,10 @@ export function timeAgo(timestamp: string, now = Date.now()) {
   if (Math.abs(hours) < 24) return relative.format(hours, "hour");
   return relative.format(Math.round(hours / 24), "day");
 }
+
+/** "53%", "23°", "410 ppm": a whole number with the shortest unit that still reads, for tight spaces. */
+export function compactMeasurement({ value, unit }: Pick<Measurement, "value" | "unit">) {
+  const rounded = Math.round(value);
+  if (unit === "%") return `${rounded}%`;
+  return unit.startsWith("°") ? `${rounded}°` : `${rounded} ${unit}`;
+}

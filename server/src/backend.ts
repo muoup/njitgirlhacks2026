@@ -1,7 +1,7 @@
 import type {
-  DashboardData, GardensData, InsightsResult, PlantData, ReadingData,
-  ReadingRange, ReadingsData,
+  DashboardData, GardensData, InsightsResult, ReadingRange, ReadingsData,
 } from "./schemas";
+import { accountFixtures, fixtureReading, HOUR, REPORT_DELAY } from "./fixtures";
 
 // Internal identity boundary, not a signed token. A backend token protocol is TBD.
 export interface BackendIdentity {
@@ -18,92 +18,81 @@ export interface BackendAdapter {
   hasPlant(identity: BackendIdentity, plantId: string): Promise<boolean>;
 }
 
-const fixtureTime = "2026-10-03T12:00:00.000Z";
-const meta = () => ({ source: "mock" as const, hydratedAt: new Date().toISOString() });
-
-function fixtures(identity: BackendIdentity) {
-  // Each account has its own deterministic fixture IDs; another account cannot query them.
-  const suffix = identity.accountId;
-  const gardens = [
-    { id: `garden-herbs-${suffix}`, name: "Kitchen herbs", plantCount: 2, deviceCount: 1 },
-    { id: `garden-patio-${suffix}`, name: "Patio garden", plantCount: 1, deviceCount: 1 },
-  ];
-  const plants: PlantData[] = [
-    { id: `plant-basil-${suffix}`, gardenId: gardens[0].id, name: "Basil", species: "Ocimum basilicum" },
-    { id: `plant-mint-${suffix}`, gardenId: gardens[0].id, name: "Mint", species: "Mentha" },
-    { id: `plant-tomato-${suffix}`, gardenId: gardens[1].id, name: "Tomato", species: "Solanum lycopersicum" },
-  ];
-  const devices = gardens.map((garden, index) => ({
-    id: `device-${index + 1}-${suffix}`, gardenId: garden.id,
-    name: `Soil monitor ${index + 1}`, lastSeenAt: fixtureTime,
-  }));
-  return { gardens, plants, devices };
-}
-
-function reading(plantId: string, deviceId: string, measuredAt: string, index = 0): ReadingData {
-  return {
-    plantId, deviceId, measuredAt,
-    measurements: [
-      { metric: "soil_moisture", value: 40 + (index % 9), unit: "%" },
-      { metric: "temperature", value: 22 + (index % 5) * 0.5, unit: "°C" },
-    ],
-  };
-}
-
-function insights(gardenId: string): InsightsResult {
-  return {
-    insights: {
-      gardenId, status: "ready", generatedAt: fixtureTime,
-      items: [{
-        id: `insight-${gardenId}`, plantId: null,
-        text: "Demo insight: soil moisture is steady. Compare its trend before adjusting watering.",
-      }],
-    },
-    meta: meta(),
-  };
-}
-
-// Replace this with an HTTP adapter once the teammate's API is agreed.
-// Domain data is never stored in the BFF. Fixture generation is development scaffolding.
+// Replace this adapter once the teammate's HTTP API is agreed.
 export class MockBackend implements BackendAdapter {
+  private readonly referenceTime: number;
+
+  constructor(private readonly clock: () => number = Date.now) {
+    // Keep trend values stable across overlapping requests for this process.
+    this.referenceTime = clock();
+  }
+
+  private meta(now: number) {
+    return { source: "mock" as const, hydratedAt: new Date(now).toISOString() };
+  }
+
+  private latestAt(now: number) {
+    // The mock monitors report hourly, with a four-minute reporting delay.
+    return Math.floor((now - REPORT_DELAY) / HOUR) * HOUR;
+  }
+
+  private insights(data: ReturnType<typeof accountFixtures>, gardenId: string): InsightsResult["insights"] {
+    const items = data.insights[gardenId];
+    return items
+      ? { gardenId, status: "ready", generatedAt: new Date(this.referenceTime - 2 * HOUR).toISOString(), items }
+      : { gardenId, status: "unavailable", generatedAt: null, items: [] };
+  }
+
   async listGardens(identity: BackendIdentity): Promise<GardensData> {
-    return { gardens: fixtures(identity).gardens, meta: meta() };
+    return { gardens: accountFixtures(identity.accountId).gardens, meta: this.meta(this.clock()) };
   }
 
   async hydrateDashboard(identity: BackendIdentity, gardenId: string): Promise<DashboardData | null> {
-    const data = fixtures(identity);
+    const data = accountFixtures(identity.accountId);
     const garden = data.gardens.find(item => item.id === gardenId);
     if (!garden) return null;
+    const now = this.clock();
+    const latestAt = this.latestAt(now);
     const plants = data.plants.filter(item => item.gardenId === gardenId);
     const devices = data.devices.filter(item => item.gardenId === gardenId);
+    const device = devices.find(item => item.reports);
     return {
-      garden, plants, devices,
-      latestReadings: plants.map(plant => reading(plant.id, devices[0].id, fixtureTime)),
-      insights: insights(gardenId).insights,
-      meta: meta(),
+      garden,
+      plants: plants.map(({ seed, profiles, ...plant }) => plant),
+      devices: devices.map(({ reports, ...device }) => ({
+        ...device, lastSeenAt: reports ? new Date(latestAt).toISOString() : null,
+      })),
+      latestReadings: plants.flatMap(plant => plant.profiles && device
+        ? [fixtureReading(plant, device.id, latestAt, this.referenceTime)] : []),
+      insights: this.insights(data, gardenId),
+      meta: this.meta(now),
     };
   }
 
   async getReadings(identity: BackendIdentity, plantId: string, range: ReadingRange): Promise<ReadingsData | null> {
-    const data = fixtures(identity);
+    const data = accountFixtures(identity.accountId);
     const plant = data.plants.find(item => item.id === plantId);
     if (!plant) return null;
-    const device = data.devices.find(item => item.gardenId === plant.gardenId)!;
-    const from = Date.parse(range.from);
-    const to = Date.parse(range.to);
-    // At most 169 hourly points in the validated seven-day range, inclusive.
-    const readings: ReadingData[] = [];
-    for (let timestamp = from, index = 0; timestamp <= to; timestamp += 3_600_000, index++) {
-      readings.push(reading(plantId, device.id, new Date(timestamp).toISOString(), index));
+    const now = this.clock();
+    const device = data.devices.find(item => item.gardenId === plant.gardenId && item.reports);
+    const readings: ReadingsData["readings"] = [];
+    if (plant.profiles && device) {
+      const end = Math.min(Date.parse(range.to), this.latestAt(now));
+      // At most 169 hourly points in the validated seven-day inclusive range.
+      for (let at = Math.ceil(Date.parse(range.from) / HOUR) * HOUR; at <= end; at += HOUR) {
+        readings.push(fixtureReading(plant, device.id, at, this.referenceTime));
+      }
     }
-    return { plantId, ...range, readings, meta: meta() };
+    return { plantId, ...range, readings, meta: this.meta(now) };
   }
 
   async getInsights(identity: BackendIdentity, gardenId: string): Promise<InsightsResult | null> {
-    return fixtures(identity).gardens.some(item => item.id === gardenId) ? insights(gardenId) : null;
+    const data = accountFixtures(identity.accountId);
+    return data.gardens.some(item => item.id === gardenId)
+      ? { insights: this.insights(data, gardenId), meta: this.meta(this.clock()) } : null;
   }
 
   async hasPlant(identity: BackendIdentity, plantId: string): Promise<boolean> {
-    return fixtures(identity).plants.some(item => item.id === plantId);
+    return accountFixtures(identity.accountId).plants.some(item => item.id === plantId);
   }
 }

@@ -13,6 +13,9 @@
   --color-grove-ember-hi: var(--grove-ember-hi);
   --color-grove-parchment: var(--grove-parchment);
   --color-grove-mist: var(--grove-mist);
+  --color-grove-ok: var(--grove-ok);
+  --color-grove-watch: var(--grove-watch);
+  --color-grove-act: var(--grove-act);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -100,6 +103,14 @@
   --grove-near-2: #305739;
   --grove-near-3: #213d28;
   --grove-front: #0b1810;
+  /* The forest floor under the dashboard: moss, shade, fallen leaves, and the moonlit clearing behind a stop. */
+  --grove-moss: #142b1c;
+  --grove-moss-hi: #183220;
+  --grove-shade: #0c1c14;
+  --grove-leaf: #4a3a22;
+  --grove-leaf-hi: #5c4829;
+  --grove-clearing: #122719;
+  --grove-clearing-hi: #152c1d;
   --grove-ember: #e3ab76;
   --grove-ember-hi: #f6dcae;
   --grove-parchment: #f3ead2;
@@ -107,6 +118,11 @@
   --grove-wood: #5a432e;
   --grove-wood-hi: #6a5038;
   --grove-wood-lo: #47341f;
+
+  /* How much a plant wants from you: nothing, a look, something done today. */
+  --grove-ok: #9fd89a;
+  --grove-watch: #f2b648;
+  --grove-act: #f0694f;
 }
 
 @layer base {

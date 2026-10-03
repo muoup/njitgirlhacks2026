@@ -1,3 +1,4 @@
+import "./src/lib/config";
 import tailwind from "bun-plugin-tailwind";
 import { rm } from "node:fs/promises";
 import path from "node:path";
@@ -20,6 +21,10 @@ const result = await Bun.build({
     "process.env.NODE_ENV": JSON.stringify("production"),
   },
 });
+
+if (!result.success) {
+  throw new AggregateError(result.logs, "Frontend build failed.");
+}
 
 for (const output of result.outputs) {
   console.log(` ${path.relative(process.cwd(), output.path)}  ${(output.size / 1024).toFixed(1)} KB`);
