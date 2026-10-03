@@ -7,7 +7,6 @@ export interface ChartPoint {
   value: number;
 }
 
-const HEIGHT = 156;
 const MARGIN = { top: 10, right: 10, bottom: 24, left: 40 };
 const HOUR = 3_600_000;
 
@@ -57,19 +56,24 @@ function timeAxis(from: number, to: number, room: number) {
 }
 const moment = new Intl.DateTimeFormat("en", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
-/** One metric over time. Hover or drag to read a point; the latest value shows otherwise. */
+/**
+ * One metric over time. Hover or drag to read a point; the latest value shows otherwise.
+ * The line takes its colour from --chart-1, so a parent can tint it.
+ */
 export function LineChart({
   title,
   unit,
   points,
   from,
   to,
+  height = 156,
 }: {
   title: string;
   unit: string;
   points: ChartPoint[];
   from: number;
   to: number;
+  height?: number;
 }) {
   const [ref, width] = useWidth();
   const [hovered, setHovered] = useState<number | null>(null);
@@ -77,7 +81,7 @@ export function LineChart({
   const last = points.at(-1);
   const shown = (hovered !== null ? points[hovered] : undefined) ?? last;
   const innerWidth = Math.max(width - MARGIN.left - MARGIN.right, 0);
-  const innerHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
+  const innerHeight = height - MARGIN.top - MARGIN.bottom;
 
   let plot = null;
   if (last && width > 0) {
@@ -104,7 +108,7 @@ export function LineChart({
     plot = (
       <svg
         width={width}
-        height={HEIGHT}
+        height={height}
         role="img"
         aria-label={`${title} from ${moment.format(first.at)} to ${moment.format(last.at)}: lowest ${formatMeasurement({ value: Math.min(...values), unit })}, highest ${formatMeasurement({ value: Math.max(...values), unit })}, latest ${formatMeasurement({ value: last.value, unit })}.`}
         className="block touch-pan-y"
@@ -124,7 +128,7 @@ export function LineChart({
           <text
             key={tick}
             x={x(tick)}
-            y={HEIGHT - 6}
+            y={height - 6}
             // A label at the right-hand edge would be cut off if it were centred.
             textAnchor={x(tick) > width - 24 ? "end" : "middle"}
             className="fill-muted-foreground text-[11px]"
@@ -142,7 +146,7 @@ export function LineChart({
             {hovered !== null && (
               <line x1={x(shown.at)} x2={x(shown.at)} y1={MARGIN.top} y2={floor} className="stroke-grove-mist/50" />
             )}
-            <circle cx={x(shown.at)} cy={y(shown.value)} r="4" className="fill-chart-1 stroke-card" strokeWidth="2" />
+            <circle cx={x(shown.at)} cy={y(shown.value)} r="4" className="fill-chart-1 stroke-background" strokeWidth="2" />
           </g>
         )}
       </svg>
@@ -160,7 +164,7 @@ export function LineChart({
           </span>
         )}
       </figcaption>
-      <div ref={ref} style={{ height: HEIGHT }}>
+      <div ref={ref} style={{ height }}>
         {last ? (
           plot
         ) : (

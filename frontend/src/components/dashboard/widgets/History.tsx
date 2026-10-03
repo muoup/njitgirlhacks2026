@@ -1,42 +1,17 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { api, type Reading } from "@/lib/api";
 import { metricLabel } from "@/lib/format";
-import { useResource } from "@/lib/useResource";
 import { cn } from "@/lib/utils";
-import { type ChartPoint, LineChart } from "../LineChart";
-import { Panel, Skeleton } from "../Panel";
+import { LineChart } from "../LineChart";
+import { Plaque, Skeleton } from "../Panel";
+import { type RangeId, RANGES, rangeOf, seriesByMetric, usePlantReadings } from "../readings";
 
-const HOUR = 3_600_000;
-const RANGES = [
-  { id: "24h", label: "24 hours", span: 24 * HOUR },
-  { id: "7d", label: "7 days", span: 7 * 24 * HOUR },
-] as const;
-type RangeId = (typeof RANGES)[number]["id"];
-
-/** Splits readings into one series per metric, in the order the metrics first appear. */
-function seriesByMetric(readings: Reading[]) {
-  const series = new Map<string, { unit: string; points: ChartPoint[] }>();
-  for (const reading of readings) {
-    const at = Date.parse(reading.measuredAt);
-    for (const { metric, unit, value } of reading.measurements) {
-      const entry = series.get(metric) ?? { unit, points: [] };
-      entry.points.push({ at, value });
-      series.set(metric, entry);
-    }
-  }
-  return series;
-}
-
-/** A plant's numbers over time, one small chart per metric. Fetched apart from the dashboard. */
-export function History({ plantId, metrics }: { plantId: string; metrics?: string[] }) {
+/** A plant's numbers over time, one small chart per metric. */
+export function History({ plantId, metrics, cut }: { plantId: string; metrics?: string[]; cut?: number }) {
   const [rangeId, setRangeId] = useState<RangeId>("24h");
-  const range = RANGES.find(item => item.id === rangeId)!;
-  const { resource, retry } = useResource(() => {
-    const to = new Date();
-    return api.getPlantReadings(plantId, new Date(to.getTime() - range.span), to);
-  }, [plantId, rangeId]);
+  const range = rangeOf(rangeId);
+  const { resource, retry } = usePlantReadings(plantId, rangeId);
 
   const toggle = (
     <div role="group" aria-label="Time range" className="flex rounded-lg border p-0.5">
@@ -99,8 +74,8 @@ export function History({ plantId, metrics }: { plantId: string; metrics?: strin
   }
 
   return (
-    <Panel title="History" action={toggle}>
+    <Plaque title="History" action={toggle} cut={cut}>
       {body}
-    </Panel>
+    </Plaque>
   );
 }

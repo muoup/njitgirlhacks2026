@@ -1,9 +1,10 @@
 import { GroveSymbols } from "@/components/grove/GroveSymbols";
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { Planted } from "@/components/grove/Scene";
-import type { Plant } from "@/lib/api";
+import type { Plant, Reading } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { statusLabel } from "./view";
+import { CompactReadings, readingInWords } from "./CompactReadings";
+import { type PlantOverview, URGENCY, type Urgency, urgencyLabel } from "./overview";
 import "@/components/grove/grove.css";
 
 const FAIRIES = [
@@ -23,36 +24,48 @@ function Fairy() {
   );
 }
 
+/** A small cut stone beside a mushroom that wants something: marked for "needs you", plain for "keep an eye on it". */
+function Flag({ urgency }: { urgency: Urgency }) {
+  return (
+    <svg aria-hidden="true" viewBox="-10 -10 20 20" className="absolute top-7 right-2 size-5 sm:right-5">
+      <polygon points="0,-9 9,0 0,9 -9,0" style={{ fill: URGENCY[urgency].color }} />
+      <polygon points="0,-9 9,0 0,0" fill="rgb(255 255 255 / 0.3)" />
+      {urgency === "act" && <path d="M0,-4.5 V1 M0,3.6 V4.2" stroke="#2a0f08" strokeWidth="2.2" strokeLinecap="round" />}
+    </svg>
+  );
+}
+
 /**
- * The garden as a strip of the grove: one mushroom per plant, standing on the top edge of
- * the page. Glowing is healthy, wrinkled needs care, unlit has no status. A fairy hovers
- * over a plant with a note that needs follow-up. Choosing a mushroom selects its plant.
+ * The garden at a glance, as a strip of the grove: one mushroom per plant, standing on the
+ * top edge of the page with its latest readings under its name. The aura's colour is the
+ * plant's urgency. Choosing a mushroom selects its plant.
  */
 export function GroveBand({
   plants,
+  overviews,
+  readings,
   selectedId,
-  followUpIds,
   onSelect,
 }: {
   plants: Plant[];
+  overviews: PlantOverview[];
+  readings: Reading[];
   selectedId: string | null;
-  /** Plants with a note that needs follow-up. */
-  followUpIds: Set<string>;
   onSelect: (plantId: string | null) => void;
 }) {
   return (
-    <div className="relative h-[270px] overflow-hidden bg-grove-sky">
+    <div className="relative h-[376px] overflow-hidden bg-grove-sky [--floor:92px] sm:h-[330px] sm:[--floor:78px]">
       <GroveSymbols />
 
       {/* Scenery stands on the bottom edge of this box, which is the top of the ground strip. */}
       <svg
         aria-hidden="true"
-        viewBox="0 0 1440 220"
+        viewBox="0 -46 1440 266"
         preserveAspectRatio="xMidYMax slice"
-        className="absolute inset-x-0 top-0 h-[calc(100%-46px)] w-full"
+        className="absolute inset-x-0 top-0 h-[calc(100%-var(--floor)+14px)] w-full"
       >
-        <polygon points="0,90 1440,60 1440,220 0,220" style={{ fill: "var(--grove-haze)" }} />
-        <g transform="translate(985 86) scale(0.42)">
+        <polygon points="0,70 1440,40 1440,220 0,220" style={{ fill: "var(--grove-haze)" }} />
+        <g transform="translate(1010 44) scale(0.42)">
           <circle className="grove-glow" r="112" fill="rgb(230 234 208 / 0.06)" />
           <polygon
             points="62,0 50,36 19,59 -19,59 -50,36 -62,0 -50,-36 -19,-59 19,-59 50,-36"
@@ -88,8 +101,8 @@ export function GroveBand({
           </g>
         ))}
         <g className="grove-near">
-          <Planted shape="tree-a" x={30} y={226} scale={0.92} sway={{ duration: 8 }} />
-          <Planted shape="tree-c" x={1410} y={226} scale={0.95} flip sway={{ duration: 9, delay: -3 }} />
+          <Planted shape="tree-a" x={30} y={226} scale={0.7} sway={{ duration: 8 }} />
+          <Planted shape="tree-c" x={1410} y={226} scale={0.7} flip sway={{ duration: 9, delay: -3 }} />
         </g>
       </svg>
 
@@ -98,7 +111,7 @@ export function GroveBand({
         aria-hidden="true"
         viewBox="0 0 1440 60"
         preserveAspectRatio="none"
-        className="absolute inset-x-0 bottom-0 h-[60px] w-full fill-background"
+        className="absolute inset-x-0 bottom-0 h-(--floor) w-full fill-background"
       >
         <polygon points="0,60 0,12 240,3 520,14 820,5 1100,15 1300,6 1440,10 1440,60" />
       </svg>
@@ -106,34 +119,31 @@ export function GroveBand({
       <div
         role="group"
         aria-label="Plants in this garden"
-        className="absolute inset-x-0 bottom-0 flex justify-center-safe gap-1 overflow-x-auto px-4 sm:gap-4 sm:px-16"
+        className="absolute inset-x-0 bottom-0 flex justify-center-safe gap-1 overflow-x-auto px-4 sm:gap-2 sm:px-16"
       >
         {plants.map(plant => {
           const selected = plant.id === selectedId;
-          const followUp = followUpIds.has(plant.id);
+          const urgency = overviews.find(overview => overview.plantId === plant.id)?.urgency ?? null;
+          const reading = readings.find(item => item.plantId === plant.id);
           return (
             <button
               key={plant.id}
               type="button"
               aria-pressed={selected}
-              aria-label={`${plant.name}: ${statusLabel(plant).toLowerCase()}${followUp ? ", has a note that needs follow-up" : ""}`}
+              aria-label={`${plant.name}: ${urgencyLabel(urgency).toLowerCase()}, ${readingInWords(reading)}`}
               onClick={() => onSelect(selected ? null : plant.id)}
-              className="group relative flex shrink-0 cursor-pointer flex-col items-center border-0 bg-transparent p-0 pt-6 font-sans outline-none"
+              className="group relative flex w-[100px] shrink-0 cursor-pointer flex-col items-center border-0 bg-transparent p-0 pt-6 font-sans outline-none sm:w-[132px]"
             >
-              {followUp && (
-                <svg aria-hidden="true" viewBox="-20 -20 40 40" className="grove-float-c absolute top-0 left-1/2 size-9">
-                  <circle className="grove-glow" r="16" fill="rgb(243 230 168 / 0.14)" />
-                  <Fairy />
-                </svg>
-              )}
+              {(urgency === "act" || urgency === "watch") && <Flag urgency={urgency} />}
               <PlantMushroom
-                status={plant.status}
+                urgency={urgency}
+                quiet={!reading}
                 className={cn(
                   "h-[80px] w-[86px] origin-[50%_90%] sm:h-[102px] sm:w-[110px] transition-transform duration-200 group-hover:scale-110",
                   selected && "scale-[1.18] group-hover:scale-[1.18]",
                 )}
               />
-              <span className="flex h-9 items-start">
+              <span className="flex h-[calc(var(--floor)-18px)] flex-col items-center gap-0.5">
                 <span
                   className={cn(
                     "rounded-full px-2.5 py-0.5 text-sm font-bold text-grove-mist",
@@ -143,6 +153,7 @@ export function GroveBand({
                 >
                   {plant.name}
                 </span>
+                <CompactReadings reading={reading} className="text-grove-mist" />
               </span>
             </button>
           );

@@ -13,6 +13,9 @@
   --color-grove-ember-hi: var(--grove-ember-hi);
   --color-grove-parchment: var(--grove-parchment);
   --color-grove-mist: var(--grove-mist);
+  --color-grove-ok: var(--grove-ok);
+  --color-grove-watch: var(--grove-watch);
+  --color-grove-act: var(--grove-act);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -107,6 +110,11 @@
   --grove-wood: #5a432e;
   --grove-wood-hi: #6a5038;
   --grove-wood-lo: #47341f;
+
+  /* How much a plant wants from you: nothing, a look, something done today. */
+  --grove-ok: #9fd89a;
+  --grove-watch: #f2b648;
+  --grove-act: #f0694f;
 }
 
 @layer base {

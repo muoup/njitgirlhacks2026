@@ -3,27 +3,51 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** The flat night-coloured card that measured data sits in. */
-export function Panel({
+// Each frame is cut a few pixels out of square, in fixed pixels so tall plaques are not more skewed.
+const CUTS = [
+  "polygon(0 5px, calc(100% - 3px) 0, 100% calc(100% - 6px), 4px 100%)",
+  "polygon(4px 0, 100% 4px, calc(100% - 5px) 100%, 0 calc(100% - 3px))",
+  "polygon(0 2px, 100% 6px, calc(100% - 2px) calc(100% - 2px), 5px 100%)",
+];
+
+/**
+ * The wooden plaque that measured data sits on: an uneven wood frame around a flat dark
+ * face, the same board as the sign-in page. Written notes go on paper instead.
+ */
+export function Plaque({
   title,
   action,
+  cut = 0,
   className,
   children,
 }: {
   title?: string;
   action?: ReactNode;
+  /** Which of the frame shapes to use, so neighbouring plaques differ. */
+  cut?: number;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className={cn("h-full rounded-xl border bg-card p-5 text-card-foreground", className)}>
-      {(title || action) && (
-        <header className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
-          {title && <h2 className="m-0 text-xs font-bold tracking-[0.18em] text-muted-foreground uppercase">{title}</h2>}
-          {action}
-        </header>
-      )}
-      {children}
+    <section className={cn("relative m-2.5", className)}>
+      {/* The frame is a separate clipped element so focus rings inside the plaque are not clipped with it. */}
+      <span
+        aria-hidden="true"
+        className="absolute -inset-2.5"
+        style={{
+          background: "linear-gradient(178deg, var(--grove-wood-hi) 50%, var(--grove-wood) 50%)",
+          clipPath: CUTS[cut % CUTS.length],
+        }}
+      />
+      <div className="relative h-full bg-[#14271b] p-4 sm:p-5">
+        {(title || action) && (
+          <header className="mb-4 flex min-h-8 flex-wrap items-center justify-between gap-3">
+            {title && <h2 className="m-0 font-brush text-3xl leading-none font-normal text-grove-parchment">{title}</h2>}
+            {action}
+          </header>
+        )}
+        {children}
+      </div>
     </section>
   );
 }
