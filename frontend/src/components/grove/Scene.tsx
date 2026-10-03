@@ -38,7 +38,7 @@ function Stage({ className, children }: { className?: string; children: ReactNod
 
 type Shape = "tree-a" | "tree-b" | "tree-c" | "thicket" | "ridge" | "tuft";
 
-function Planted({
+export function Planted({
   shape,
   x,
   y,
@@ -104,9 +104,11 @@ const FIREFLIES = [
 /**
  * The night grove: a side-on stack of low-poly layers that drift against the pointer.
  * `children` stand on the forest floor, behind the foreground grass (the signpost goes here).
+ * `backdrop` is for pages where the scene sits behind something else: it is hidden from
+ * assistive technology and loses its fireflies, which would otherwise cross the content.
  * The scene is illustrative only and shows no live readings.
  */
-export function Scene({ children }: { children?: ReactNode }) {
+export function Scene({ backdrop = false, children }: { backdrop?: boolean; children?: ReactNode }) {
   return (
     <div className="absolute inset-0 isolate">
       <GroveSymbols />
@@ -207,8 +209,13 @@ export function Scene({ children }: { children?: ReactNode }) {
         <svg
           viewBox="0 0 1440 900"
           preserveAspectRatio="xMidYMax slice"
-          role="img"
-          aria-label="A moonlit grove. Four mushrooms glow on the forest floor; behind them, a fifth stands wrinkled and unlit."
+          role={backdrop ? undefined : "img"}
+          aria-hidden={backdrop || undefined}
+          aria-label={
+            backdrop
+              ? undefined
+              : "A moonlit grove. Four mushrooms glow on the forest floor; behind them, a fifth stands wrinkled and unlit."
+          }
         >
           {MUSHROOMS.map(shroom => (
             <g key={shroom.x} transform={`translate(${shroom.x} ${shroom.y}) scale(${shroom.scale})`}>
@@ -228,15 +235,17 @@ export function Scene({ children }: { children?: ReactNode }) {
 
       {children}
 
-      <Layer dx={42} dy={9} className="pointer-events-none">
-        {FIREFLIES.map(fly => (
-          <span
-            key={fly.left}
-            className="grove-firefly"
-            style={{ left: fly.left, top: fly.top, animationDelay: fly.delay }}
-          />
-        ))}
-      </Layer>
+      {!backdrop && (
+        <Layer dx={42} dy={9} className="pointer-events-none">
+          {FIREFLIES.map(fly => (
+            <span
+              key={fly.left}
+              className="grove-firefly"
+              style={{ left: fly.left, top: fly.top, animationDelay: fly.delay }}
+            />
+          ))}
+        </Layer>
+      )}
 
       <Layer dx={54} dy={11} className="pointer-events-none">
         <Stage className="fill-grove-front">

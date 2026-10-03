@@ -1,3 +1,5 @@
+import { Link } from "react-router";
+
 import { driftWithPointer } from "@/components/grove/parallax";
 import { Scene } from "@/components/grove/Scene";
 import { Signpost } from "@/components/grove/Signpost";
@@ -23,9 +25,9 @@ export function Landing() {
       className="relative h-svh min-h-[640px] overflow-hidden bg-grove-sky text-foreground"
     >
       <header className="absolute inset-x-0 top-0 z-20 px-[clamp(20px,6vw,96px)] py-5">
-        <a href="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
+        <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
           loam
-        </a>
+        </Link>
       </header>
 
       <main>

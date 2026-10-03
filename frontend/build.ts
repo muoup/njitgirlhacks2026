@@ -14,6 +14,8 @@ const result = await Bun.build({
   minify: true,
   target: "browser",
   sourcemap: "linked",
+  // Same as bunfig.toml does for the dev server: inline BUN_PUBLIC_* variables.
+  env: "BUN_PUBLIC_*",
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },

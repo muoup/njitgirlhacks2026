@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { Link } from "react-router";
 
 import { cn } from "@/lib/utils";
 
@@ -16,8 +17,8 @@ function Board({
 }) {
   const lit = variant === "lit";
   return (
-    <a
-      href={href}
+    <Link
+      to={href}
       className={cn(
         "grove-board absolute inline-flex items-center whitespace-nowrap font-brush leading-none no-underline",
         "outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-grove-ember-hi",
@@ -43,7 +44,7 @@ function Board({
         }
       />
       <span className={cn("relative", lit ? "text-[1.75em]" : "text-[1.5em]")}>{children}</span>
-    </a>
+    </Link>
   );
 }
 

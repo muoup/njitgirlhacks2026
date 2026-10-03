@@ -12,6 +12,15 @@ To start a development server:
 bun dev
 ```
 
+By default the app runs on sample data with a pretend sign-in (any email and password), so it
+needs nothing else running. To use the BFF in `../server` instead, start it and point the app at it:
+
+```bash
+BUN_PUBLIC_API_URL=http://localhost:3001 bun dev
+```
+
+The BFF seeds a demo account in development; its credentials are in `server/src/auth.ts`.
+
 To run for production:
 
 ```bash

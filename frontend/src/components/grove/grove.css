@@ -71,6 +71,12 @@
   animation: grove-float-c 30s ease-in-out infinite;
 }
 
+/* A mushroom with no health reported: neither glowing nor wrinkled. */
+.grove-unlit {
+  opacity: 0.6;
+  filter: saturate(0.3);
+}
+
 .grove-firefly {
   position: absolute;
   width: 4px;
