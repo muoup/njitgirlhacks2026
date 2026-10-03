@@ -150,7 +150,7 @@ export async function createApp(options: {
         response: { 200: s.ReadingsResponse },
         detail: {
           tags: ["Readings"], summary: "Read a plant's numerical history",
-          description: "Required UTC/offset timestamps, inclusive range, maximum seven days. Mock data is sampled hourly; backend sampling is TBD.",
+          description: "Required UTC/offset timestamps, inclusive range, maximum seven days. Mock data includes reported hourly samples with a four-minute reporting delay; backend sampling is TBD.",
           operationId: "getPlantReadings",
         },
       })

@@ -11,7 +11,13 @@ export const Garden = t.Object({
   plantCount: t.Integer({ minimum: 0 }),
   deviceCount: t.Integer({ minimum: 0 }),
 });
-export const Plant = t.Object({ id: Id, gardenId: Id, name: t.String(), species: t.String() });
+export const PlantStatus = t.Union([t.Literal("healthy"), t.Literal("needs_care")], {
+  description: "Omitted when plant health has not been assessed.",
+});
+export const Plant = t.Object({
+  id: Id, gardenId: Id, name: t.String(), species: t.String(),
+  status: t.Optional(PlantStatus),
+});
 export const Device = t.Object({
   id: Id,
   gardenId: Id,
@@ -29,11 +35,15 @@ export const Reading = t.Object({
   measuredAt: Timestamp,
   measurements: t.Array(Measurement),
 });
+export const InsightItem = t.Object({
+  id: Id, plantId: t.Union([Id, t.Null()]), text: t.String(),
+  needsFollowUp: t.Boolean({ description: "Whether the note calls for follow-up; false for informational notes." }),
+});
 export const Insights = t.Object({
   gardenId: Id,
   status: t.Union([t.Literal("unavailable"), t.Literal("ready")]),
   generatedAt: t.Union([Timestamp, t.Null()]),
-  items: t.Array(t.Object({ id: Id, plantId: t.Union([Id, t.Null()]), text: t.String() })),
+  items: t.Array(InsightItem),
 });
 export const Meta = t.Object({
   source: t.Union([t.Literal("mock"), t.Literal("backend")]),
@@ -67,6 +77,11 @@ export const InsightsResponse = t.Object({ insights: Insights, meta: Meta });
 
 export type GardenData = Static<typeof Garden>;
 export type PlantData = Static<typeof Plant>;
+export type PlantStatusData = Static<typeof PlantStatus>;
+export type DeviceData = Static<typeof Device>;
+export type MeasurementData = Static<typeof Measurement>;
+export type InsightItemData = Static<typeof InsightItem>;
+export type MetaData = Static<typeof Meta>;
 export type ReadingData = Static<typeof Reading>;
 export type InsightsData = Static<typeof Insights>;
 export type DashboardData = Static<typeof DashboardResponse>;

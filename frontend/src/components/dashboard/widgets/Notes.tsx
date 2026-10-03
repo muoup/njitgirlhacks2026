@@ -23,17 +23,13 @@ export function FollowUps({ view }: { view: DashboardView }) {
     );
   }
 
-  // If the notes don't say whether they need follow-up, "nothing needs you" would be a guess.
-  const unmarked = insights.items.length > 0 && insights.items.every(item => item.needsFollowUp === undefined);
   const count = COUNTS[items.length] ?? String(items.length);
   return (
     <section>
       <h2 className="m-0 font-brush text-4xl leading-tight font-normal text-grove-parchment">
-        {unmarked
-          ? "Notes from the grove."
-          : items.length === 0
-            ? "Nothing needs you today."
-            : `${count} ${items.length === 1 ? "thing needs" : "things need"} you.`}
+        {items.length === 0
+          ? "Nothing needs you today."
+          : `${count} ${items.length === 1 ? "thing needs" : "things need"} you.`}
       </h2>
       <Written view={view} />
       {items.length > 0 && (

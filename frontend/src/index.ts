@@ -1,3 +1,4 @@
+import "./lib/config";
 import { serve } from "bun";
 import index from "./index.html";
 

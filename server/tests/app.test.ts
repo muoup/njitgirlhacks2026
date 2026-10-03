@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import { demoCredentials } from "../src/auth";
 import { loadConfig } from "../src/config";
+import { MockBackend } from "../src/backend";
 
 const origin = "http://localhost:3000";
 let app: Awaited<ReturnType<typeof createApp>>["app"];
@@ -32,7 +33,10 @@ async function signUp(email: string) {
 }
 
 beforeAll(async () => {
-  ({ app } = await createApp({ config: loadConfig({}) }));
+  ({ app } = await createApp({
+    config: loadConfig({}),
+    backend: new MockBackend(() => Date.parse("2026-10-03T12:04:00Z")),
+  }));
 });
 
 describe("BFF contracts and sessions", () => {
@@ -64,7 +68,14 @@ describe("BFF contracts and sessions", () => {
     expect(response.status).toBe(200);
     const dashboard = await response.json();
     expect(dashboard.meta.source).toBe("mock");
-    expect(dashboard.plants).toHaveLength(2);
+    expect(dashboard.plants).toHaveLength(5);
+    expect(dashboard.plants.some((plant: { status?: string }) => plant.status === "needs_care")).toBe(true);
+    expect(dashboard.plants.some((plant: { status?: string }) => plant.status === undefined)).toBe(true);
+    expect(dashboard.latestReadings).toHaveLength(4);
+    expect(dashboard.latestReadings[0].measurements.map((item: { metric: string }) => item.metric))
+      .toEqual(["soil_moisture", "temperature", "humidity"]);
+    expect(dashboard.insights.items.filter((item: { needsFollowUp: boolean }) => item.needsFollowUp)).toHaveLength(2);
+    expect(dashboard.devices.some((device: { lastSeenAt: string | null }) => device.lastSeenAt === null)).toBe(true);
     expect(dashboard.latestReadings[0].measurements[0].unit).toBe("%");
 
     const from = "2026-10-03T00:00:00Z";
@@ -78,6 +89,13 @@ describe("BFF contracts and sessions", () => {
     const insights = await request(`/api/v1/gardens/${gardens[0].id}/insights`, cookie);
     expect(insights.status).toBe(200);
     expect((await insights.json()).insights.status).toBe("ready");
+
+    const empty = await request(`/api/v1/dashboard?gardenId=${gardens[2].id}`, cookie);
+    expect(empty.status).toBe(200);
+    const emptyDashboard = await empty.json();
+    expect(emptyDashboard.plants).toEqual([]);
+    expect(emptyDashboard.latestReadings).toEqual([]);
+    expect(emptyDashboard.insights).toMatchObject({ status: "unavailable", generatedAt: null, items: [] });
 
     const keyRequest = await app.handle(new Request(`http://localhost:3001/api/v1/plants/${dashboard.plants[0].id}/api-keys`, {
       method: "POST", headers: { Cookie: cookie, Origin: origin },
@@ -125,6 +143,10 @@ describe("BFF contracts and sessions", () => {
     expect(schema.paths["/api/v1/dashboard"].get.security).toEqual([{ bffSession: [] }]);
     expect(schema.paths["/api/v1/dashboard"].get.responses["200"].content["application/json"].schema).toBeDefined();
     expect(schema.paths["/api/v1/dashboard"].get.responses["401"]).toBeDefined();
+    const dashboardSchema = schema.paths["/api/v1/dashboard"].get.responses["200"].content["application/json"].schema;
+    expect(dashboardSchema.properties.plants.items.properties.status.enum)
+      .toEqual(["healthy", "needs_care"]);
+    expect(dashboardSchema.properties.insights.properties.items.items.required).toContain("needsFollowUp");
     expect(schema.paths["/api/v1/plants/{id}/api-keys"].post.responses["501"]).toBeDefined();
     expect(schema.components.securitySchemes.bffSession.in).toBe("cookie");
   });

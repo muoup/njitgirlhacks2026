@@ -50,9 +50,10 @@ await authClient.signIn.social({ provider: "google", callbackURL: "http://localh
 await authClient.signOut();
 ```
 
-The frontend must install `better-auth` before using that example. For domain
-requests, send `credentials: "include"`; do not store or manually forward the
-session token. The BFF's auth records remain separate from backend domain data.
+The frontend already uses Better Auth's React client. Its required
+`BUN_PUBLIC_API_URL` setting selects this BFF's origin. For domain requests, send
+`credentials: "include"`; do not store or manually forward the session token.
+The BFF's auth records remain separate from backend domain data.
 
 ## Hydration contract
 
@@ -66,10 +67,22 @@ session token. The BFF's auth records remain separate from backend domain data.
 5. Fetch existing insights with `GET /api/v1/gardens/:id/insights`.
 
 Domain responses mark `meta.source` as `mock` and include `meta.hydratedAt`.
-Fixture latest readings and insights use a fixed reference timestamp; their age
-does not trigger generation. Insights are plain text, never generated markup.
-`status: "unavailable"`, `generatedAt: null`, and an empty item list are reserved
-for a backend that has no insights yet. Sensor names and units are provisional.
+The mock adapter supplies three gardens and seven plants, with healthy plants,
+a plant needing care, a plant without readings or assessed health, an unheard-
+from device, and an empty garden. These fixtures live entirely in the BFF.
+
+`Plant.status` is optional (`healthy` or `needs_care`); omission means unassessed.
+Each insight has an explicit `needsFollowUp` boolean. Insights are plain text,
+never generated markup. The empty garden returns `status: "unavailable"`,
+`generatedAt: null`, and an empty item list. Sensor names and units are provisional.
+
+Mock monitors report on UTC hour boundaries with a four-minute delay. Latest
+readings and history share one value generator, so values at the same timestamp
+agree across requests. Histories exclude samples that have not reported yet.
+The adapter captures a trend reference time on startup and accepts an injectable
+clock for tests. Mock insights are timestamped two hours before that reference;
+their age does not trigger generation. The frontend imports response types from
+`src/schemas.ts` with type-only imports.
 
 Domain errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 Malformed schemas return 422, invalid time ranges 400, absent sessions 401, and
