@@ -32,6 +32,13 @@ function Stretch({ d, className }: { d: string; className?: string }) {
   );
 }
 
+// The clearing behind a stop: moonlit ground, cut unevenly in fixed pixels so tall stops are not more skewed.
+const CLEARING = {
+  background: "linear-gradient(164deg, var(--grove-clearing-hi) 42%, var(--grove-clearing) 42%)",
+  clipPath:
+    "polygon(14px 6px, 38% 0, calc(100% - 20px) 10px, 100% 46%, calc(100% - 8px) calc(100% - 4px), 55% 100%, 6px calc(100% - 12px), 0 40%)",
+};
+
 function curve(from: number, to: number) {
   return `M ${from} 0 C ${from} 60, ${to} 40, ${to} 100`;
 }
@@ -71,7 +78,11 @@ export function Trail({ stops }: { stops: TrailStop[] }) {
                 <polygon points="0,-10 9,-3 0,0" fill="rgb(255 255 255 / 0.35)" />
                 <polygon points="-6,9 -9,-3 0,0" fill="rgb(0 0 0 / 0.18)" />
               </svg>
-              <div className={cn("relative min-w-0 lg:w-[82%]", side === "right" && "lg:ml-auto")}>{stop.node}</div>
+              <div className={cn("relative min-w-0 lg:w-[82%]", side === "right" && "lg:ml-auto")}>
+                {/* Below the trail, so the path still runs up to the stop across it. */}
+                <span aria-hidden="true" className="absolute -inset-x-4 -inset-y-5 -z-20 sm:-inset-x-6" style={CLEARING} />
+                {stop.node}
+              </div>
             </div>
           </Fragment>
         );

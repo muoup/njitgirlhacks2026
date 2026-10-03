@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 
 import { AccountTag, GardenSign, SideBoard } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
+import { ForestFloor } from "@/components/dashboard/ForestFloor";
 import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
 import { type PlantOverview, standInOverviews, URGENCY, type Urgency } from "@/components/dashboard/overview";
 import { Skeleton, StateMessage } from "@/components/dashboard/Panel";
@@ -176,7 +177,7 @@ function SignedIn({ user }: { user: SessionUser }) {
   }
 
   return (
-    <div className="min-h-svh overflow-x-clip bg-background text-foreground">
+    <div className="flex min-h-svh flex-col overflow-x-clip bg-background text-foreground">
       <div className="relative">
         <GroveBand
           plants={loaded?.plants ?? []}
@@ -204,7 +205,11 @@ function SignedIn({ user }: { user: SessionUser }) {
         )}
         <AccountTag user={user} onSignOut={() => auth.signOut().catch(() => {})} />
       </div>
-      {body}
+      {/* Isolated so the forest floor can lie behind the stops without slipping behind the page. */}
+      <div className="relative isolate flex-1">
+        <ForestFloor />
+        {body}
+      </div>
     </div>
   );
 }
