@@ -11,10 +11,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -80,11 +82,11 @@ WSGI_APPLICATION = 'DjangoProject1.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ["tsdb"],
-        'USER': os.environ["tsdbadmin"],
-        'PASSWORD': os.environ["TSDB_PASSWORD"],
-        'HOST': os.environ["TSDB_HOST"],
-        'PORT': os.environ["TSDB_PORT"],
+        'NAME': "tsdb",
+        'USER': "tsdbadmin",
+        'PASSWORD': "<TIMESCALE_DB_PASSWORD>",
+        'HOST': "mhzy702qbk.j5cea0p5vc.tsdb.cloud.timescale.com",
+        'PORT': "32904",
         'OPTIONS': {"sslmode": "require"},
     }
 }
