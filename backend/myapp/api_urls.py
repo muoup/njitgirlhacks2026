@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from django.urls import path
 
-app_name = 'myapp'
+app_name = 'myapp_api'
 
 @api_view(['GET'])
 def api_root(request, format = 'None'):

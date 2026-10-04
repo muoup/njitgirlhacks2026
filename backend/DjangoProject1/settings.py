@@ -81,13 +81,13 @@ WSGI_APPLICATION = 'DjangoProject1.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': "tsdb",
-        'USER': "tsdbadmin",
-        'PASSWORD': "<TIMESCALE_DB_PASSWORD>",
-        'HOST': "mhzy702qbk.j5cea0p5vc.tsdb.cloud.timescale.com",
-        'PORT': "32904",
-        'OPTIONS': {"sslmode": "require"},
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("PGDATABASE"),
+        "USER": os.getenv("PGUSER"),
+        "PASSWORD": os.getenv("PGPASSWORD"),
+        "HOST": os.getenv("PGHOST"),
+        "PORT": os.getenv("PGPORT"),
+        "OPTIONS": {"sslmode": "require"},
     }
 }
 
