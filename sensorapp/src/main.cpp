@@ -2,6 +2,9 @@
 #include <SPL07-003.h>
 #include <Air_Quality_Sensor.h>
 #include "../lib/Grove_I2C_Color_Sensor_TCS3472/Adafruit_TCS34725.h"
+#include <WiFi.h>
+#include "arduino_secrets.h"
+
 /**
  * Parameters for soil sensor
  */
@@ -43,11 +46,68 @@ SPL07_003 spl;
  */
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
+/**
+ * Parameters for wireless module
+ */
+WiFiServer server(80);
+
+void printMacAddress(byte mac[]) {
+    for (int i = 0; i < 6; i++) {
+        if (i > 0) {
+            Serial.print(":");
+        }
+        if (mac[i] < 16) {
+            Serial.print("0");
+        }
+        Serial.print(mac[i], HEX);
+    }
+    Serial.println();
+}
+
+void printWifiData() {
+    // print your board's IP address:
+    IPAddress ip = WiFi.localIP();
+    Serial.print("IP Address: ");
+
+    Serial.println(ip);
+
+    // print your MAC address:
+    byte mac[6];
+    WiFi.macAddress(mac);
+    Serial.print("MAC address: ");
+    printMacAddress(mac);
+}
+
+void printCurrentNet() {
+    // print the SSID of the network you're attached to:
+    Serial.print("SSID: ");
+    Serial.println(WiFi.SSID());
+
+    // print the MAC address of the router you're attached to:
+    byte bssid[6];
+    WiFi.BSSID(bssid);
+    Serial.print("BSSID: ");
+    printMacAddress(bssid);
+
+    // print the received signal strength:
+    long rssi = WiFi.RSSI();
+    Serial.print("signal strength (RSSI):");
+    Serial.println(rssi);
+
+    // print the encryption type:
+    byte encryption = WiFi.encryptionType();
+    Serial.print("Encryption Type:");
+    Serial.println(encryption, HEX);
+    Serial.println();
+}
+
 bool aqsStatus = false;
 bool barometerStatus = false;
 bool tcsStatus = false;
+int wlStatus = WL_IDLE_STATUS;
 
 void setup() {
+    Serial.begin(9600);
     // write your initialization code here
 
     // Setup LED outputs
@@ -90,8 +150,30 @@ void setup() {
     spl.setTemperatureConfig(SPL07_4HZ, SPL07_1SAMPLE);
     // Set SPL07-003 to continuous measurements
     spl.setMode(SPL07_CONT_PRES_TEMP);
+    // check for the WiFi module:
+    if (WiFi.status() == WL_NO_MODULE) {
+        Serial.println("Communication with WiFi module failed!");
+        // don't continue
+        while (true);
+    }
+    String fv = WiFi.firmwareVersion();
+    if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
+        Serial.println("Please upgrade the firmware");
+    }
+    // attempt to connect to WiFi network:
+    while (wlStatus != WL_CONNECTED) {
+        Serial.print("Attempting to connect to WPA SSID: ");
+        Serial.println(SECRET_SSID);
+        // Connect to WPA/WPA2 network:
+        wlStatus = WiFi.begin(SECRET_SSID, SECRET_PASS);
 
-    Serial.begin(9600);
+        // wait 10 seconds for connection:
+        delay(10000);
+    }
+    // you're connected now, so print out the data:
+    Serial.print("You're connected to the network");
+    printCurrentNet();
+    printWifiData();
 }
 
 // Tracks how often loops are called
@@ -184,6 +266,5 @@ void loop() {
             Serial.println();
         }//if
         intervalTimer = millis();
-
     }
 }
