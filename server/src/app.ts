@@ -102,7 +102,12 @@ export async function createApp(options: {
     },
   } as Documentation;
 
-  const app = new Elysia({ normalize: false })
+  const app = new Elysia({ normalize: false, serve: {
+    // Gemini runs can take up to 60 seconds before producing a response. Bun's
+    // default 10-second idle timeout otherwise drops the socket mid-request.
+    idleTimeout: 90,
+    maxRequestBodySize: 16 * 1024,
+  } })
     .use(cors({
       origin: config.frontendOrigins,
       credentials: true,

@@ -1,12 +1,16 @@
-import { ApiError, type GroveApi } from "./types";
+import { ApiError, NetworkError, type GroveApi } from "./types";
 
 export function createBffApi(baseUrl: string): GroveApi {
   async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
     // The session is a cookie on the BFF's origin, so every call has to send credentials.
-    const response = await fetch(`${baseUrl}/api/v1${path}`, {
+    const options: RequestInit = {
       method,
       credentials: "include",
       ...(body !== undefined && { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    };
+    const response = await fetch(`${baseUrl}/api/v1${path}`, options).catch(error => {
+      if (error instanceof TypeError) throw new NetworkError(error);
+      throw error;
     });
     if (!response.ok) {
       const failure = await response.json().catch(() => null);

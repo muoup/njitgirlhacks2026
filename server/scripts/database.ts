@@ -7,7 +7,12 @@ const config = loadConfig();
 if (!config.database) throw new Error("Set DATABASE_URL, BETTER_AUTH_SECRET, and DEVICE_API_KEY_ENCRYPTION_KEY in server/.env first.");
 const pool = createPool(config.database);
 try {
-  if (command === "migrate") await migrate(pool);
+  if (command === "connect") {
+    // Separate connection/authentication failures from migration/schema errors.
+    await pool.query("SELECT 1");
+    console.log(JSON.stringify({ connected: true }));
+  }
+  else if (command === "migrate") await migrate(pool);
   else if (command === "check") console.log(JSON.stringify(await checkDatabase(pool)));
   else if (command === "timescale") {
     await checkDatabase(pool);
@@ -17,7 +22,7 @@ try {
     // Explicit command, never a startup mutation. Run before the first upload.
     await pool.query("SELECT create_hypertable('grove.sensor_readings', 'measured_at', if_not_exists => true, migrate_data => true)");
     console.log("grove.sensor_readings is a TimescaleDB hypertable.");
-  } else throw new Error("Use migrate, check, or timescale.");
+  } else throw new Error("Use connect, migrate, check, or timescale.");
 } catch (error) {
   logFailure(error, { scope: `database-${command}` });
   console.error(command === "timescale" ? "Check the selected database's TimescaleDB extension and table permissions."

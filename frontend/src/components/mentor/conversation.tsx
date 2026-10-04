@@ -4,6 +4,7 @@ import { failureMessage } from "@/components/shed/action";
 import { auth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
 import { notifyDataChanged } from "@/lib/data-events";
+import { createRequestId } from "@/lib/request-id";
 import { type ChatMessage, MENTORS, type Persona } from "./mentors";
 
 interface MentorChat {
@@ -98,7 +99,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     run(during, async () => {
       try {
         const response = await api.askMentor({ persona, message: text,
-          conversationId: serverConversation.current, requestId: crypto.randomUUID() });
+          conversationId: serverConversation.current, requestId: createRequestId() });
         if (conversation.current === during) {
           serverConversation.current = response.conversationId;
           setThread(current => [...current, { from: persona, text: response.reply },

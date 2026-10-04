@@ -17,7 +17,7 @@ if (pool) {
 }
 const { app, agents } = await createApp({ config,
   ...(pool && config.database ? { backend: new PostgresBackend(pool, config.database.encryptionKey), authDatabase: authDatabase(pool) } : {}) });
-app.listen({ port: config.port, maxRequestBodySize: 16 * 1024 });
+app.listen({ port: config.port });
 // Bun hot reload reexecutes the entry point; retire its previous worker/listeners.
 const runtime = globalThis as typeof globalThis & { groveAgentCleanup?: () => void };
 runtime.groveAgentCleanup?.();

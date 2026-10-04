@@ -79,11 +79,21 @@ remain as described in [VERTEX_SETUP.md](VERTEX_SETUP.md).
 From `server/` on the VM:
 
 ```bash
+bun run db:connect
 bun run db:migrate
 bun run db:check
 bun run db:timescale
 bun run db:check
 ```
+
+Run each command separately and stop on failure. `db:connect` runs only `SELECT 1`
+and prints `{"connected":true}`; it does not create tables or require migrations.
+If it fails, resolve connection/authentication/TLS first. Database diagnostics
+classify common uncoded driver errors (missing password, timeout, closed connection)
+and show SQL/network codes without printing credentials or raw error messages.
+If it passes but `db:migrate` fails, investigate migration/schema permissions
+using the reported code. A copied service URL may omit the password; include it
+and URL-encode special characters before setting `DATABASE_URL`.
 
 `db:migrate` applies the checked-in auth/domain SQL once, in a transaction with a
 migration lock. The database role needs permissions to create the `auth`/`grove`

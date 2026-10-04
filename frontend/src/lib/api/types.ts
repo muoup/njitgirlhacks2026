@@ -26,6 +26,14 @@ export class ApiError extends Error {
   }
 }
 
+/** The browser could not receive an HTTP response (network, CORS, or a dropped connection). */
+export class NetworkError extends Error {
+  constructor(cause: unknown) {
+    super("Couldn't reach the server. Check your connection and try again.", { cause });
+    this.name = "NetworkError";
+  }
+}
+
 /**
  * True while a route is reserved or unavailable during a staggered deployment.
  * Keep the 501 handling until the backend implements the potting shed's actions.

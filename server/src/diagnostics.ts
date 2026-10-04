@@ -39,27 +39,67 @@ function providerDetails(error: Record<string, unknown>) {
   };
 }
 
-export function failureDetails(error: unknown) {
+// pg sometimes throws plain Errors without a code. Translate only known driver
+// messages into fixed labels; never print SQL errors or arbitrary message text.
+function databaseCode(message: unknown) {
+  if (typeof message !== "string") return undefined;
+  switch (message) {
+    case "Connection terminated due to connection timeout":
+    case "timeout exceeded when trying to connect":
+    case "timeout expired": return "DATABASE_CONNECTION_TIMEOUT";
+    case "Connection terminated unexpectedly":
+    case "Connection terminated": return "DATABASE_CONNECTION_CLOSED";
+    case "SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string":
+    case "SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a non-empty string": return "DATABASE_PASSWORD_MISSING";
+    case "The server does not support SSL connections": return "DATABASE_TLS_UNSUPPORTED";
+    case "There was an error establishing an SSL connection": return "DATABASE_TLS_FAILED";
+    case "self signed certificate in certificate chain": return "SELF_SIGNED_CERT_IN_CHAIN";
+    case "Database migrations are missing. Run bun run db:migrate before starting the server.": return "DATABASE_SCHEMA_MISSING";
+  }
+  if (message.startsWith("SASL:")) return "DATABASE_SASL_FAILED";
+  return undefined;
+}
+
+function databaseHint(codes: Array<string | undefined>) {
+  if (codes.includes("DATABASE_PASSWORD_MISSING")) return "The driver received no usable database password. Include the PostgreSQL service password in DATABASE_URL and URL-encode special characters; a Tiger management API key is not the database password.";
+  if (codes.some(code => code === "28P01" || code === "28000" || code === "DATABASE_SASL_FAILED")) return "Database authentication failed. Check the service username/password and URL encoding in DATABASE_URL.";
+  if (codes.some(code => code === "DATABASE_CONNECTION_TIMEOUT" || code === "ETIMEDOUT" || code === "EHOSTUNREACH" || code === "ENETUNREACH")) return "The database connection timed out or could not reach the network. Check the service host/port, service status, Tiger IP allowlist, and VM outbound access. The connection timeout is 10 seconds.";
+  if (codes.includes("ECONNREFUSED")) return "The database refused the connection. Check the service status and PostgreSQL host/port in DATABASE_URL.";
+  if (codes.some(code => code === "ENOTFOUND" || code === "EAI_AGAIN")) return "The database hostname could not be resolved. Check DATABASE_URL and the VM's DNS access.";
+  if (codes.includes("DATABASE_CONNECTION_CLOSED")) return "The database connection closed before completion. Check service status, the PostgreSQL endpoint, TLS settings, and network restrictions.";
+  if (codes.some(code => code && /CERT|TLS|SSL/.test(code))) return "Database TLS negotiation or certificate verification failed. Check sslmode and the provider's trusted CA certificate settings.";
+  if (codes.includes("3D000")) return "The requested database does not exist. Use the database name from the service's PostgreSQL connection details.";
+  if (codes.includes("42501")) return "The database role lacks permission. Migrations need permission to create schemas/tables in this database.";
+  if (codes.some(code => code === "DATABASE_SCHEMA_MISSING" || code === "42P01" || code === "3F000")) return "Application tables or schemas are missing. Run bun run db:migrate using the same DATABASE_URL.";
+  return undefined;
+}
+
+export function failureDetails(error: unknown, options: { database?: boolean } = {}) {
   const seen = new Set<unknown>();
   const chain: Array<{
     name: string; code?: string; status?: number; url?: string; retryable?: boolean;
     provider?: ReturnType<typeof providerDetails>; stack?: string[];
   }> = [];
-  let current = error;
-  while (current && !seen.has(current) && chain.length < 6) {
+  const pending: unknown[] = [error];
+  while (pending.length && chain.length < 6) {
+    const current = pending.shift();
+    if (!current || seen.has(current)) continue;
     seen.add(current);
     const value = record(current);
     if (!value) { chain.push({ name: "UnknownError" }); break; }
     const status = typeof value.statusCode === "number" ? value.statusCode : typeof value.status === "number" ? value.status : undefined;
     // Classify a known library error without emitting its message or credentials.
     const missingCredentials = typeof value.message === "string" && value.message.includes("Could not load the default credentials");
-    chain.push({ name: token(value.name) ?? "Error", code: token(value.code) ?? (missingCredentials ? "GOOGLE_ADC_MISSING" : undefined), status,
+    chain.push({ name: token(value.name) ?? "Error", code: token(value.code) ??
+      (options.database ? databaseCode(value.message) : undefined) ?? (missingCredentials ? "GOOGLE_ADC_MISSING" : undefined), status,
       url: endpoint(value.url), retryable: typeof value.isRetryable === "boolean" ? value.isRetryable : undefined,
       provider: providerDetails(value),
       // Exclude the first stack line: error messages can embed model responses.
       stack: stackFrames(value),
     });
-    current = value.cause ?? value.lastError;
+    const cause = value.cause ?? value.lastError;
+    if (cause) pending.push(cause);
+    if (Array.isArray(value.errors)) pending.push(...value.errors.slice(0, 6));
   }
   const provider = chain.find(item => {
     if (!item.url) return false;
@@ -68,7 +108,8 @@ export function failureDetails(error: unknown) {
   });
   const vertex = provider?.url && new URL(provider.url).hostname !== "generativelanguage.googleapis.com";
   const reason = provider?.provider?.reasons?.[0];
-  const hint = chain.some(item => item.code === "GOOGLE_ADC_MISSING") ? "Google Application Default Credentials are missing. Run gcloud auth application-default login, then gcloud auth application-default set-quota-project with your GOOGLE_VERTEX_PROJECT."
+  const hint = options.database ? databaseHint(chain.map(item => item.code))
+    : chain.some(item => item.code === "GOOGLE_ADC_MISSING") ? "Google Application Default Credentials are missing. Run gcloud auth application-default login, then gcloud auth application-default set-quota-project with your GOOGLE_VERTEX_PROJECT."
     : reason === "SERVICE_DISABLED" ? "Enable the Vertex AI / Agent Platform API (aiplatform.googleapis.com) in the configured Cloud project."
     : reason?.includes("API_KEY") ? "Google rejected the API key or its restrictions. Check the key's API/project permissions."
     : vertex && (provider?.status === 401 || provider?.status === 403) ? "Vertex AI denied access. Check Application Default Credentials, roles/aiplatform.user, the enabled aiplatform.googleapis.com API, and the project's billing account."
@@ -94,5 +135,6 @@ function stackFrames(error: Record<string, unknown>) {
 }
 
 export function logFailure(error: unknown, context: { scope: string; path?: string; accountId?: string }) {
-  console.error("BFF failure", JSON.stringify({ timestamp: new Date().toISOString(), ...context, ...failureDetails(error) }, null, 2));
+  console.error("BFF failure", JSON.stringify({ timestamp: new Date().toISOString(), ...context,
+    ...failureDetails(error, { database: context.scope.startsWith("database-") }) }, null, 2));
 }

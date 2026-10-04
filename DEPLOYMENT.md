@@ -74,3 +74,8 @@ service exits, the launcher stops the other and returns the first exit status.
 Keep it in the foreground of a service manager such as systemd for automatic
 startup and restart. It does not configure DNS, TLS, Azure firewall rules, or a
 reverse proxy.
+
+Chat and forced insight refreshes can spend up to 60 seconds in Gemini. The BFF
+allows 90 seconds of connection inactivity so it can return a reply or a JSON
+timeout error. If you use a reverse proxy, set its response/read timeout to at
+least 90 seconds as well (for example, `proxy_read_timeout 90s;` in Nginx).

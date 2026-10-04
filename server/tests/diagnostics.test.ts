@@ -7,6 +7,43 @@ import { GeminiRunner } from "../src/agent/runner";
 import { testVertexAuth } from "./vertex-auth";
 
 describe("server failure diagnostics", () => {
+  test("uncoded database driver errors explain password, connection, and TLS failures", () => {
+    const cases = [
+      ["SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string", "DATABASE_PASSWORD_MISSING", "password"],
+      ["SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a non-empty string", "DATABASE_PASSWORD_MISSING", "password"],
+      ["Connection terminated due to connection timeout", "DATABASE_CONNECTION_TIMEOUT", "10 seconds"],
+      ["timeout exceeded when trying to connect", "DATABASE_CONNECTION_TIMEOUT", "10 seconds"],
+      ["Connection terminated unexpectedly", "DATABASE_CONNECTION_CLOSED", "closed"],
+      ["The server does not support SSL connections", "DATABASE_TLS_UNSUPPORTED", "TLS"],
+      ["self signed certificate in certificate chain", "SELF_SIGNED_CERT_IN_CHAIN", "TLS"],
+    ];
+    for (const [message, code, hint] of cases) {
+      const error = new Error(message);
+      const detail = failureDetails(error, { database: true });
+      expect(detail.errors[0]!.code).toBe(code);
+      expect(detail.hint).toContain(hint!);
+      expect(JSON.stringify(detail)).not.toContain(message!);
+      // Classifications stay scoped to database diagnostics.
+      expect(failureDetails(error).errors[0]!.code).toBeUndefined();
+    }
+  });
+
+  test("database diagnostics preserve nested network codes but exclude private error contents", () => {
+    const privateMessage = "query contained private-memory and fixture-password";
+    const nested = Object.assign(new Error(privateMessage), { code: "ECONNREFUSED" });
+    const error = new AggregateError([nested], privateMessage);
+    const detail = failureDetails(error, { database: true });
+    expect(detail.errors[1]!.code).toBe("ECONNREFUSED");
+    expect(detail.hint).toContain("refused");
+    expect(JSON.stringify(detail)).not.toContain(privateMessage);
+    const auth = failureDetails(Object.assign(new Error(privateMessage), { code: "28P01" }), { database: true });
+    expect(auth.hint).toContain("authentication failed");
+    expect(JSON.stringify(auth)).not.toContain(privateMessage);
+    const unknown = failureDetails(new Error(privateMessage), { database: true });
+    expect(unknown.hint).toBeUndefined();
+    expect(JSON.stringify(unknown)).not.toContain(privateMessage);
+  });
+
   test("database URLs and plant credentials are redacted from stack frames", () => {
     const key = `grove_device_${"x".repeat(43)}`;
     const databaseUrl = "postgresql://fixture-user:fixture-password@db.example/grove?sslmode=require";
@@ -52,6 +89,8 @@ describe("server failure diagnostics", () => {
     try {
       const response = await post("/api/v1/chat", { persona: "gnome", message: "private-prompt", requestId: "diagnostic" }, cookie);
       expect(response.status).toBe(502);
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:3000");
+      expect(response.headers.get("Access-Control-Allow-Credentials")).toBe("true");
       expect(await response.json()).toEqual({ error: { code: "AGENT_FAILED", message: "The mentor could not complete this run. Try again." } });
       expect(log).toHaveBeenCalledTimes(1);
       const detail = JSON.parse(log.mock.calls[0]![1] as string);

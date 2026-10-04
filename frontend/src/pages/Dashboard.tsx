@@ -2,7 +2,7 @@ import { MessageCircle, Shovel } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 
-import { AccountTag, GardenSign, SideBoard, Wordmark } from "@/components/dashboard/BandHeader";
+import { AccountTag, GardenSign, SideBoard, TitleSign, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
 import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
@@ -161,7 +161,9 @@ function SignedIn({ user }: { user: SessionUser }) {
   } else if (gardenList.length === 0) {
     body = (
       <Body>
-        <StateMessage title="Nothing planted yet.">No gardens are linked to this account.</StateMessage>
+        <StateMessage title="Nothing planted yet." action={{ label: "Create a garden", onClick: () => navigate("/shed") }}>
+          Start your first garden in the potting shed.
+        </StateMessage>
       </Body>
     );
   } else if (!garden) {
@@ -190,25 +192,9 @@ function SignedIn({ user }: { user: SessionUser }) {
           onSelect={selectPlant}
         />
         <Wordmark to="/" />
-        {gardenList.length > 0 && (
-          <GardenSign
-            gardens={gardenList}
-            gardenId={garden?.id}
-            onSelect={selectGarden}
-            opposite={
-              <SideBoard to="/mentor" label="Ask the mentor" short="Mentor" tilt="-2.5deg">
-                <MessageCircle aria-hidden="true" className="size-5" />
-              </SideBoard>
-            }
-            beside={
-              <SideBoard to="/shed" label="Potting shed" short="Shed">
-                <Shovel aria-hidden="true" className="size-5" />
-              </SideBoard>
-            }
-          >
-            {loaded && loaded.plants.length > 0 && <Summary dashboard={loaded} overviews={overviews} />}
-          </GardenSign>
-        )}
+        <DashboardSign gardens={gardenList} gardenId={garden?.id} onSelect={selectGarden}>
+          {loaded && loaded.plants.length > 0 && <Summary dashboard={loaded} overviews={overviews} />}
+        </DashboardSign>
         <AccountTag user={user} onSignOut={() => auth.signOut().catch(() => {})} />
       </div>
       {/* Isolated so the forest floor can lie behind the stops without slipping behind the page. */}
@@ -217,6 +203,32 @@ function SignedIn({ user }: { user: SessionUser }) {
         {body}
       </div>
     </div>
+  );
+}
+
+/** Navigation stays available while gardens load, fail, or have not been created yet. */
+export function DashboardSign({ gardens, gardenId, onSelect, children }: {
+  gardens: Garden[];
+  gardenId: string | undefined;
+  onSelect: (id: string) => void;
+  children?: ReactNode;
+}) {
+  const links = {
+    opposite: (
+      <SideBoard to="/mentor" label="Ask the mentor" short="Mentor" tilt="-2.5deg">
+        <MessageCircle aria-hidden="true" className="size-5" />
+      </SideBoard>
+    ),
+    beside: (
+      <SideBoard to="/shed" label="Potting shed" short="Shed">
+        <Shovel aria-hidden="true" className="size-5" />
+      </SideBoard>
+    ),
+  };
+  return gardens.length > 0 ? (
+    <GardenSign gardens={gardens} gardenId={gardenId} onSelect={onSelect} {...links}>{children}</GardenSign>
+  ) : (
+    <TitleSign title="Your gardens" {...links} />
   );
 }
 
