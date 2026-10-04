@@ -1,8 +1,8 @@
 import type { MetricInfoData, ReadingData } from "./schemas";
 
-// PLACEHOLDERS until the prototype's sensors are measured. Soil: the ADC count with the probe
-// in dry air and in water (a larger count is drier). Light: the count covered and in full sun.
-const SOIL = { dry: 850, wet: 400 };
+// Soil is measured: the probe's ADC count in dry air and in water (a larger count is wetter).
+const SOIL = { dry: 0, wet: 500 };
+// PLACEHOLDER until the prototype's sensor is measured: the count covered and in full sun.
 const LIGHT = { dark: 0, bright: 1023 };
 
 interface Definition extends Omit<MetricInfoData, "metric"> {

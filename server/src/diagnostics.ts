@@ -138,3 +138,17 @@ export function logFailure(error: unknown, context: { scope: string; path?: stri
   console.error("BFF failure", JSON.stringify({ timestamp: new Date().toISOString(), ...context,
     ...failureDetails(error, { database: context.scope.startsWith("database-") }) }, null, 2));
 }
+
+// What a refused device submission looked like, for whoever is writing the firmware. The key is
+// never logged, only whether one came. What the device sent is cut short and passed through
+// `redact`, since nothing says a broken request holds only readings.
+export function logIngestFailure(request: Request, failure: { status: number; code: string; reasons: string[]; body?: string }) {
+  const sent = (name: string) => request.headers.get(name)?.slice(0, 120) ?? null;
+  const authorization = request.headers.get("Authorization");
+  console.error("Ingest failure", JSON.stringify({
+    timestamp: new Date().toISOString(), status: failure.status, code: failure.code, reasons: failure.reasons,
+    contentType: sent("Content-Type"), contentLength: sent("Content-Length"), userAgent: sent("User-Agent"),
+    key: !authorization ? "missing" : /^Bearer grove_device_[A-Za-z0-9_-]{43}$/i.test(authorization) ? "well-formed" : "malformed",
+    body: failure.body === undefined ? "(not read)" : redact(failure.body.length > 600 ? `${failure.body.slice(0, 600)}… (${failure.body.length} characters)` : failure.body),
+  }, null, 2));
+}

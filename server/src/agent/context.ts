@@ -2,6 +2,7 @@ import type { BackendAdapter, BackendIdentity } from "../backend";
 import type { DashboardData, ReadingData } from "../schemas";
 import { ApiError } from "../errors";
 import type { MemoryData } from "./schemas";
+import { forecastFor, type ForecastDayData, type WeatherSource } from "../weather";
 
 export function summarize(readings: ReadingData[]) {
   const metrics = new Map<string, { at: string; value: number; unit: string }[]>();
@@ -32,6 +33,8 @@ export interface AccountContext {
     garden: DashboardData["garden"]; plants: DashboardData["plants"];
     devices: DashboardData["devices"]; latestReadings: DashboardData["latestReadings"];
     source: "mock" | "backend";
+    /** The week ahead at the garden's location, today first. Absent when it has none or the forecast could not be had. */
+    forecast?: ForecastDayData[];
     histories: Array<{ plantId: string; digest: string; metrics: ReturnType<typeof summarize>; sampling?: { method: "last"; bucketSeconds: number } }>;
   }>;
 }
@@ -44,7 +47,7 @@ export function revision(context: AccountContext) {
   } })).digest("hex");
 }
 
-export async function buildContext(backend: BackendAdapter, identity: BackendIdentity, now: number): Promise<AccountContext> {
+export async function buildContext(backend: BackendAdapter, identity: BackendIdentity, now: number, weather?: WeatherSource): Promise<AccountContext> {
   const { gardens } = await backend.listGardens(identity);
   if (gardens.length > 20) throw new ApiError(429, "CONTEXT_LIMIT", "This v0 supports at most 20 gardens per account.");
   const context: AccountContext = { observedAt: new Date(now).toISOString(),
@@ -64,8 +67,9 @@ export async function buildContext(backend: BackendAdapter, identity: BackendIde
         ...(history?.sampling ? { sampling: history.sampling } : {}),
         digest: new Bun.CryptoHasher("sha256").update(JSON.stringify(readings)).digest("hex") });
     }
+    const forecast = await forecastFor(weather, dashboard.garden);
     context.gardens.push({ garden: dashboard.garden, plants: dashboard.plants, devices: dashboard.devices,
-      latestReadings: dashboard.latestReadings, source: dashboard.meta.source, histories });
+      latestReadings: dashboard.latestReadings, source: dashboard.meta.source, ...(forecast ? { forecast: forecast.days } : {}), histories });
   }
   return context;
 }

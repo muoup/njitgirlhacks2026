@@ -6,6 +6,7 @@ import { testVertexAuth } from "./vertex-auth";
 import type { InsightOutputData, MutationData } from "../src/agent/schemas";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
+import type { WeatherSource } from "../src/weather";
 
 const alice: BackendIdentity = { version: "v1", userId: "alice", accountId: "alice" };
 const bob: BackendIdentity = { version: "v1", userId: "bob", accountId: "bob" };
@@ -227,6 +228,57 @@ describe("garden agent harness", () => {
     expect(await layout()).toBeUndefined();
     order = ([urgent, ...rest]) => [{ type: "plant", plantId: urgent }, { type: "calm-plants", plantIds: [...rest, "another-account"] }];
     expect(await layout()).toBeUndefined();
+  });
+
+  test("a garden with a forecast gives it to the agent, keeps a weather stop, and draws only forecast days", async () => {
+    const day = { date: "2026-10-05", day: "tomorrow", sky: "Showers" as const, high: 30, low: 25, rain: 8.3, rainChance: 63, sunshine: 6, gust: 14, alerts: ["rain" as const] };
+    const weather: WeatherSource = { async search() { return []; }, async forecast() { return { fetchedAt: new Date(initialTime).toISOString(), days: [day] }; } };
+    // Only the first garden says where it is.
+    class Placed extends MockBackend {
+      override async hydrateDashboard(identity: BackendIdentity, gardenId: string) {
+        const dashboard = await super.hydrateDashboard(identity, gardenId);
+        if (dashboard?.garden.name === "Back garden") dashboard.garden.location = { name: "Miami, Florida, United States", latitude: 25.77, longitude: -80.19 };
+        return dashboard;
+      }
+    }
+    const backend = new Placed(() => initialTime);
+    type Layout = NonNullable<InsightOutputData["gardens"][number]["layout"]>;
+    let order: (ids: string[]) => Layout = () => [];
+    const runner = new Runner(async input => {
+      const output = insights(input);
+      const placed = input.context.gardens.find(garden => garden.garden.name === "Back garden")!;
+      expect(placed.forecast).toEqual([day]);
+      expect(input.context.gardens.filter(garden => garden.forecast)).toHaveLength(1);
+      if (input.mode === "chat") return { reply: "Rain is expected tomorrow.", blocks: [{ type: "weather", plantId: placed.plants[0]!.id, date: day.date }] };
+      for (const garden of output.gardens) {
+        garden.overviews[0]?.blocks.push({ type: "weather", date: "2026-10-05" }, { type: "weather", date: "2026-10-09" }, { type: "weather" });
+        garden.layout = order(garden.overviews.map(overview => overview.plantId));
+      }
+      return output;
+    });
+    const agents = new AgentService(backend, runner, () => initialTime, 60_000, weather);
+    const { gardens } = await backend.listGardens(alice);
+    const published = async (name: string) => {
+      await agents.refresh(alice);
+      const dashboard = (await backend.hydrateDashboard(alice, gardens.find(garden => garden.name === name)!.id))!;
+      return agents.decorate(alice, dashboard.insights);
+    };
+    order = ([first, ...rest]) => [{ type: "plant", plantId: first }, { type: "weather" }, ...(rest.length ? [{ type: "calm-plants" as const, plantIds: rest }] : [])];
+    const placed = await published("Back garden");
+    expect(placed.layout!.map(stop => stop.type)).toEqual(["plant", "weather", "calm-plants", "garden-notes"]);
+    // Only the day that is in the forecast is drawn, and only where there is a forecast.
+    expect(placed.overviews![0]!.blocks).toEqual([{ type: "chart", range: "7d", metric: "soil_moisture" }, { type: "weather", date: "2026-10-05" }]);
+    const unplaced = await published("Windowsill");
+    expect(unplaced.layout!.map(stop => stop.type)).toEqual(["plant", "calm-plants", "garden-notes"]);
+    expect(unplaced.overviews![0]!.blocks).toEqual([{ type: "chart", range: "7d", metric: "soil_moisture" }]);
+    // A forecast the agent gave no place still has one, ahead of the garden's notes; two are one too many.
+    order = ([first, ...rest]) => [{ type: "plant", plantId: first }, ...(rest.length ? [{ type: "calm-plants" as const, plantIds: rest }] : [])];
+    expect((await published("Back garden")).layout!.map(stop => stop.type)).toEqual(["plant", "calm-plants", "weather", "garden-notes"]);
+    order = ([first, ...rest]) => [{ type: "weather" }, { type: "plant", plantId: first }, { type: "weather" }, { type: "calm-plants", plantIds: rest }];
+    expect((await published("Back garden")).layout).toBeUndefined();
+    // Chat can talk about the forecast, but a reply draws none of it.
+    const reply = await agents.chat(alice, { message: "Will it rain?", persona: "gnome", requestId: "weather-1" });
+    expect(reply.blocks).toEqual([]);
   });
 
   test("a chat reply carries at most two drawable blocks and remembers what it showed", async () => {

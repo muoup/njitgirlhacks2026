@@ -39,15 +39,17 @@ export function PersonaSwitch({ roomy = false, className }: { roomy?: boolean; c
       <fieldset
         ref={switches}
         disabled={busy}
-        className="m-0 flex w-fit min-w-0 rounded-full border-0 bg-background/70 p-1 disabled:opacity-60"
+        className="relative isolate m-0 flex w-fit min-w-0 gap-1 border-0 p-1 disabled:opacity-60"
       >
+        {/* A wooden rail, with each choice a flat tile set in it. */}
+        <Plank cut="polygon(0 3px, calc(100% - 2px) 0, 100% calc(100% - 3px), 3px 100%)" />
         <legend className="sr-only">Who answers</legend>
         {PERSONAS.map(id => (
           <label key={id} className="cursor-pointer">
             <input type="radio" name={name} value={id} checked={persona === id} onChange={() => choose(id)} className="peer sr-only" />
             <span
               className={cn(
-                "flex items-center gap-1.5 rounded-full font-bold text-grove-mist peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/60",
+                "flex items-center gap-1.5 bg-[#14271b] font-bold text-grove-mist peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-grove-ember-hi",
                 "px-3 py-1 text-sm",
                 roomy && "lg:px-4 lg:py-1.5 lg:text-lg",
               )}
@@ -70,6 +72,9 @@ export function PersonaSwitch({ roomy = false, className }: { roomy?: boolean; c
     </div>
   );
 }
+
+// A slip of slate, cut a little out of square like the notes.
+const SLIP = "polygon(0 2px, calc(100% - 2px) 0, 100% calc(100% - 2px), 3px 100%)";
 
 const SAID = "m-0 max-w-[85%] self-start border-0 border-l-[3px] border-solid bg-card px-4 py-2.5 leading-relaxed";
 
@@ -206,7 +211,7 @@ export function Conversation({ className }: { className?: string }) {
  * question box is set in a wooden frame of its own, and everything is larger on a wide window.
  */
 export function AskBox({ inputRef, roomy = false, className }: { inputRef?: Ref<HTMLInputElement>; roomy?: boolean; className?: string }) {
-  const { persona, draft, setDraft, busy, error, started, ask, refresh, clear } = useMentor();
+  const { persona, draft, setDraft, busy, error, started, ask, clear } = useMentor();
 
   function send(event: FormEvent) {
     event.preventDefault();
@@ -216,7 +221,7 @@ export function AskBox({ inputRef, roomy = false, className }: { inputRef?: Ref<
   return (
     <div className={className}>
       {!started && (
-        <ul aria-label="Questions to start with" className="m-0 mb-3 flex list-none flex-wrap gap-2 p-0">
+        <ul aria-label="Questions to start with" className="m-0 mb-3 flex list-none flex-wrap gap-x-3 gap-y-2.5 p-0 pt-1.5 pl-2">
           {STARTERS.map(question => (
             <li key={question}>
               <button
@@ -224,10 +229,22 @@ export function AskBox({ inputRef, roomy = false, className }: { inputRef?: Ref<
                 disabled={busy}
                 onClick={() => ask(question)}
                 className={cn(
-                  "cursor-pointer rounded-full border border-border bg-background/70 px-3 py-1 text-sm text-grove-mist outline-none hover:border-grove-ember hover:text-grove-parchment focus-visible:ring-[3px] focus-visible:ring-ring/60 disabled:opacity-60",
-                  roomy && "lg:px-3.5 lg:py-1.5 lg:text-base",
+                  "group relative isolate cursor-pointer border-0 bg-transparent px-3.5 py-1.5 font-sans text-sm text-grove-mist outline-none hover:text-grove-parchment focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-grove-ember-hi disabled:opacity-60",
+                  roomy && "lg:px-4 lg:py-2 lg:text-base",
                 )}
               >
+                {/* The edge and the face are separate clipped pieces, so the focus outline is not clipped with them. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 -z-10 bg-[color-mix(in_srgb,var(--grove-mist)_34%,var(--grove-front))] group-hover:bg-grove-ember"
+                  style={{ clipPath: SLIP }}
+                />
+                <span aria-hidden="true" className="absolute inset-[1.5px] -z-10 bg-[#10231a]" style={{ clipPath: SLIP }} />
+                {/* A leaf caught on the corner. */}
+                <svg aria-hidden="true" viewBox="0 0 30 16" className="absolute -top-1.5 -left-2 w-4 -rotate-[35deg]">
+                  <polygon points="0,8 9,0 30,8 9,16" fill="#3c6f45" />
+                  <polygon points="0,8 9,0 30,8" fill="#4a8452" />
+                </svg>
                 {question}
               </button>
             </li>
@@ -261,10 +278,7 @@ export function AskBox({ inputRef, roomy = false, className }: { inputRef?: Ref<
           Ask
         </Button>
       </form>
-      <div className="mt-2 flex justify-between gap-x-2">
-        <Button variant="ghost" size="sm" disabled={busy} onClick={refresh} className={cn("text-muted-foreground", roomy && "lg:h-9 lg:text-base")}>
-          Refresh garden insights
-        </Button>
+      <div className="mt-2 flex justify-end">
         {/* Works while a reply is on its way too: the reply is then dropped. */}
         <Button variant="ghost" size="sm" disabled={!started} onClick={clear} className={cn("text-muted-foreground", roomy && "lg:h-9 lg:text-base")}>
           <Eraser aria-hidden="true" />

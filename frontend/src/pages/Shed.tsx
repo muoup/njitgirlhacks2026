@@ -144,6 +144,7 @@ function SignedIn({ user }: { user: SessionUser }) {
                   onPlantRemoved={plantId =>
                     editBed(bed.garden.id, current => ({ ...current, plants: current.plants.filter(plant => plant.id !== plantId) }))
                   }
+                  onEdited={garden => editBed(bed.garden.id, current => ({ ...current, garden }))}
                   onRemoved={() => editBed(bed.garden.id, () => null)}
                 />
               </div>
@@ -160,7 +161,17 @@ function SignedIn({ user }: { user: SessionUser }) {
 /** Where gardens and plants are added and removed, and where each plant's key is kept. */
 export function Shed() {
   const session = auth.useSession();
-  if (session.status === "loading") return <div role="status" aria-label="Loading" className="shed-soil min-h-svh bg-background" />;
+  if (session.status === "loading") {
+    // The shed's roof is already up while the session is looked up, so the page does not start blank.
+    return (
+      <div role="status" aria-label="Loading" className="shed-soil min-h-svh bg-background">
+        <div className="relative">
+          <GroveStrip turf className="h-[250px] [--floor:44px] sm:h-[214px] sm:[--floor:44px]" />
+          <Wordmark to="/dashboard" />
+        </div>
+      </div>
+    );
+  }
   if (session.status === "signed-out") return <Navigate to="/signin" replace />;
   return <SignedIn user={session.user} />;
 }

@@ -1,4 +1,4 @@
-import { Droplets, type LucideIcon, Thermometer, Wind } from "lucide-react";
+import { Droplets, type LucideIcon, Sun, Thermometer, Wind } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -8,7 +8,6 @@ import { GroveSymbols } from "@/components/grove/GroveSymbols";
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { Board } from "@/components/grove/Signpost";
 import { MentorsFigure, MonitorFigure, MushroomFigure, Plate, Pressed, RecordFigure } from "@/components/guide/Plate";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const PARTS = ["One", "Two", "Three", "Four", "Five"];
@@ -38,24 +37,26 @@ const STATES: { urgency: Urgency | null; looks: string }[] = [
   { urgency: null, looks: "Unlit. Nothing has been measured yet." },
 ];
 
+// Named as the garden names them.
 const MEASURED: { icon: LucideIcon; name: string; unit: string; means: string }[] = [
-  { icon: Droplets, name: "Soil moisture", unit: "%", means: "How wet the soil is around the roots." },
-  { icon: Thermometer, name: "Temperature", unit: "°C", means: "How warm it is where the plant stands." },
-  { icon: Wind, name: "Humidity", unit: "%", means: "How damp the air is around it." },
+  { icon: Droplets, name: "Soil", unit: "%", means: "How wet the soil is around the roots." },
+  { icon: Sun, name: "Light", unit: "%", means: "How much light reaches the plant." },
+  { icon: Thermometer, name: "Warmth", unit: "°C", means: "How warm it is where the plant stands." },
+  { icon: Wind, name: "Air quality", unit: "", means: "A reading of the air around it, best compared with its own history." },
 ];
 
 const PLACES = [
   {
     name: "The garden",
-    holds: "A trail through your plants, starting with the ones that need you. Each stop shows the plant’s readings and a note on how it is doing.",
+    holds: "A trail through your plants, starting with the ones that need you. Each stop shows the plant’s readings and a note on how it is doing. A garden with a place also gets the week’s weather.",
   },
   {
     name: "The potting shed",
-    holds: "Where you start gardens and add plants. Each plant gets a key there, which its monitor uses to report.",
+    holds: "Where you start gardens, say where each one grows, and add plants. Each plant gets a key there, which its monitor uses to report.",
   },
   {
     name: "The mentor",
-    holds: "Burdock the gnome and Moss the wizard take questions about your plants. They know the same things and say them differently.",
+    holds: "Burdock the Gnome and Moss the Wizard take questions about your plants. They know the same things and say them differently.",
   },
 ];
 
@@ -77,9 +78,11 @@ export function About() {
         <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
           <Brand />
         </Link>
-        <Button asChild className="font-bold">
-          <Link to="/signin">Get started</Link>
-        </Button>
+        <div className="text-[13px]">
+          <Board href="/signin" variant="lit" className="relative">
+            Get started
+          </Board>
+        </div>
       </header>
 
       <div className="guide-desk mx-auto max-w-[70rem] px-2 sm:px-5">
@@ -137,7 +140,7 @@ export function About() {
             </Part>
 
             <Part number={3} title="What a monitor measures">
-              <dl className="m-0 grid gap-5 px-1 sm:grid-cols-3">
+              <dl className="m-0 grid gap-5 px-1 sm:grid-cols-2">
                 {MEASURED.map(({ icon: Icon, name, unit, means }) => (
                   <div key={name} className="guide-label px-4 py-3.5">
                     <dt className="flex items-center gap-2 font-bold">

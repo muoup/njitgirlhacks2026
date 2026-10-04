@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Plank } from "../BandHeader";
 import { LineChart } from "../LineChart";
 import { useMetrics } from "../metrics";
 import { Plaque, Skeleton } from "../Panel";
@@ -15,7 +16,9 @@ export function History({ plantId, metrics, cut }: { plantId: string; metrics?: 
   const catalogue = useMetrics();
 
   const toggle = (
-    <div role="group" aria-label="Time range" className="flex rounded-lg border p-0.5">
+    <div role="group" aria-label="Time range" className="relative isolate flex gap-1 p-1">
+      {/* A wooden rail, with each choice a flat tile set in it. */}
+      <Plank cut="polygon(0 3px, calc(100% - 2px) 0, 100% calc(100% - 3px), 3px 100%)" />
       {RANGES.map(item => (
         <button
           key={item.id}
@@ -23,8 +26,8 @@ export function History({ plantId, metrics, cut }: { plantId: string; metrics?: 
           aria-pressed={item.id === rangeId}
           onClick={() => setRangeId(item.id)}
           className={cn(
-            "cursor-pointer rounded-md border-0 bg-transparent px-3 py-1 font-sans text-sm text-muted-foreground outline-none",
-            "focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:bg-accent aria-pressed:font-bold aria-pressed:text-foreground",
+            "cursor-pointer border-0 bg-[var(--plaque-face,#14271b)] px-3 py-1 font-sans text-sm font-bold text-grove-mist outline-none",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-grove-ember-hi aria-pressed:bg-primary aria-pressed:text-primary-foreground",
           )}
         >
           {item.label}

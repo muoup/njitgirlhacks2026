@@ -1,6 +1,6 @@
 import { cors } from "@elysiajs/cors";
 import { openapi, type ElysiaOpenAPIConfig } from "@elysiajs/openapi";
-import { Elysia, t } from "elysia";
+import { Elysia, ParseError, t } from "elysia";
 import type { BetterAuthOptions } from "better-auth";
 import { createAuth, seedDemoAccount } from "./auth";
 import { MockBackend, type BackendAdapter, type BackendIdentity } from "./backend";
@@ -11,10 +11,13 @@ import { ApiError } from "./errors";
 import { DomainService } from "./domain";
 import { AgentService } from "./agent/service";
 import { GeminiRunner, type AgentRunner } from "./agent/runner";
-import { logFailure } from "./diagnostics";
+import { logFailure, logIngestFailure } from "./diagnostics";
 import { IngestRequest, IngestResponse } from "./ingestion";
 import { hashKey } from "./storage/keys";
 import { metricCatalogue } from "./metrics";
+import { forecastFor, OpenMeteo, type WeatherSource } from "./weather";
+
+const INGEST_PATH = "/api/v1/ingest/readings";
 
 const errorResponses = {
   400: s.ErrorResponse,
@@ -38,13 +41,18 @@ export async function createApp(options: {
   backend?: BackendAdapter;
   authDatabase?: BetterAuthOptions["database"];
   agentRunner?: AgentRunner;
+  weather?: WeatherSource;
 } = {}) {
   const config = options.config ?? loadConfig();
   const backend: BackendAdapter = options.backend ?? new MockBackend();
+  const weather = options.weather ?? new OpenMeteo();
   const agents = new AgentService(backend, options.agentRunner ??
-    (config.agent.project ? new GeminiRunner({ project: config.agent.project, location: config.agent.location }) : undefined));
+    (config.agent.project ? new GeminiRunner({ project: config.agent.project, location: config.agent.location }) : undefined),
+    Date.now, 60_000, weather);
   const domain = new DomainService(backend);
   const ingestLimits = new Map<string, { at: number; count: number }>();
+  // What each device submission sent, as text, kept only so a refused one can be logged.
+  const ingestBodies = new WeakMap<Request, string>();
   function requestId(request: Request) {
     const value = request.headers.get("Idempotency-Key");
     if (value && !/^[A-Za-z0-9_.:-]{1,120}$/.test(value)) throw new ApiError(422, "INVALID_REQUEST", "Invalid Idempotency-Key.");
@@ -79,7 +87,7 @@ export async function createApp(options: {
     info: {
       title: "Grove BFF",
       version: "0.1.0",
-      description: "Cookie-authenticated garden backend with PostgreSQL/TimescaleDB storage, plant-key sensor ingestion, and Gemini chat/scheduled insights. Without database configuration, development uses fixtures.",
+      description: "Cookie-authenticated garden backend with PostgreSQL/TimescaleDB storage, plant-key sensor ingestion, and Gemini chat/scheduled insights, and seven-day forecasts from Open-Meteo for gardens with a location. Without database configuration, development uses fixtures.",
     },
     tags: [
       ...authSchema.tags,
@@ -116,6 +124,14 @@ export async function createApp(options: {
       allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     }))
     .onError(({ code, error, set, request }) => {
+      if (new URL(request.url).pathname === INGEST_PATH && request.method === "POST") {
+        const refused = error instanceof ApiError ? { status: error.status, code: error.code, reasons: [error.message] }
+          : code === "VALIDATION" ? { status: 422, code: "INVALID_REQUEST",
+            reasons: error.all.slice(0, 6).map(issue => `${issue.path || "(body)"}: ${issue.summary ?? issue.message}`) }
+          : code === "PARSE" ? { status: 400, code: "INVALID_REQUEST", reasons: ["The body is not valid JSON."] }
+          : null;
+        if (refused) logIngestFailure(request, { ...refused, body: ingestBodies.get(request) });
+      }
       if (error instanceof ApiError) {
         if (error.status >= 500 && error.status !== 501) {
           logFailure(error, { scope: "http", path: new URL(request.url).pathname });
@@ -159,7 +175,13 @@ export async function createApp(options: {
       response: t.Object({ status: t.Literal("ok") }),
       detail: { summary: "Server liveness", operationId: "getHealth" },
     })
-    .post("/api/v1/ingest/readings", async ({ request, body, set }) => {
+    // Public: the sign-in page asks before anyone has a session.
+    .get("/api/v1/sign-in/methods", () => ({ google: Boolean(config.google) }), {
+      response: t.Object({ google: t.Boolean() }),
+      detail: { tags: ["Account"], summary: "List the ways to sign in", operationId: "listSignInMethods",
+        description: "Email and password always work. Google is offered only when the server has OAuth credentials." },
+    })
+    .post(INGEST_PATH, async ({ request, body, set }) => {
       set.headers["Cache-Control"] = "no-store";
       const header = request.headers.get("Authorization") ?? "";
       const match = /^Bearer (grove_device_[A-Za-z0-9_-]{43})$/i.exec(header);
@@ -178,6 +200,13 @@ export async function createApp(options: {
       set.status = result.duplicate ? 200 : 201;
       return result;
     }, {
+      // Read as text first, so that a body which is not JSON can still be shown in the log.
+      async parse({ request, contentType }) {
+        const text = await request.text();
+        ingestBodies.set(request, text);
+        if (contentType !== "application/json") return text;
+        try { return JSON.parse(text); } catch { throw new ParseError(); }
+      },
       body: IngestRequest, response: { ...errorResponses, 200: IngestResponse, 201: IngestResponse },
       detail: { tags: ["Ingestion"], operationId: "submitSensorReading", security: [{ plantApiKey: [] }],
         summary: "Submit one firmware sensor sample", description: "Key determines account, plant, and device. Reuse sampleId unchanged on retries. measuredAt is optional. Raw ADC/AQ values are not calibrated percentages, ppm, or lux. The colour sensor's reading is one hex value, color. No Gemini call is made during ingestion." },
@@ -240,6 +269,32 @@ export async function createApp(options: {
           description: "Checks ownership and cascades to plants, devices, readings, and firmware credentials. Mock storage returns 501.",
         },
       })
+      .patch("/gardens/:id", async ({ identity, params, body, request }) => {
+        checkOrigin(request);
+        if (!(await backend.listGardens(identity)).gardens.some(garden => garden.id === params.id)) {
+          throw new ApiError(404, "NOT_FOUND", "Garden not found.");
+        }
+        if (!backend.updateGarden) throw new ApiError(501, "NOT_IMPLEMENTED", "Garden changes await the backend protocol.");
+        const result = await backend.updateGarden(identity, params.id, body);
+        agents.invalidate(identity);
+        return result;
+      }, {
+        params: t.Object({ id: s.Id }), body: s.GardenEdit,
+        response: { 200: s.GardenResponse, 501: s.ErrorResponse },
+        detail: {
+          tags: ["Gardens"], summary: "Rename a garden, or say where it is", operationId: "updateGarden",
+          description: "Changes the name, the setting (indoors or outdoors) or the location; a field left out keeps its value, and a null location forgets it. A garden with a location gets a forecast on its dashboard. Coordinates are kept to two decimal places. Mock storage returns 501.",
+        },
+      })
+      .get("/places", async ({ query }) => {
+        try { return { places: await weather.search(query.query.trim()) }; }
+        catch (error) { throw new ApiError(502, "WEATHER_UNAVAILABLE", "Places could not be looked up. Try again shortly.", { cause: error }); }
+      }, {
+        query: t.Object({ query: t.String({ minLength: 2, maxLength: 100, pattern: "\\S" }) }),
+        response: { 200: s.PlacesResponse },
+        detail: { tags: ["Gardens"], summary: "Find a town to place a garden in", operationId: "searchPlaces",
+          description: "Up to five matches for a town name or postcode, from Open-Meteo's geocoding. Send one back in PATCH /gardens/:id." },
+      })
       .post("/gardens/:id/plants", async ({ identity, params, body, set, request }) => {
         checkOrigin(request);
         set.headers["Cache-Control"] = "no-store";
@@ -287,7 +342,8 @@ export async function createApp(options: {
       .get("/dashboard", async ({ identity, query }) => {
         const dashboard = await backend.hydrateDashboard(identity, query.gardenId);
         if (!dashboard) throw new ApiError(404, "NOT_FOUND", "Garden not found.");
-        return { ...dashboard, insights: agents.decorate(identity, dashboard.insights, dashboard) };
+        const forecast = await forecastFor(weather, dashboard.garden);
+        return { ...dashboard, insights: agents.decorate(identity, dashboard.insights, dashboard), ...(forecast ? { forecast } : {}) };
       }, {
         query: t.Object({ gardenId: s.Id }),
         response: { 200: s.DashboardResponse },

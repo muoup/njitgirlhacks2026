@@ -13,6 +13,8 @@ export type WidgetSpec =
   | { type: "calm-plants"; plantIds: string[] }
   /** Notes about the garden as a whole, and its monitors. */
   | { type: "garden-notes" }
+  /** The week's forecast where the garden is. Only drawn for a garden that has one. */
+  | { type: "weather" }
   /** `metrics` limits the charts to those metrics; by default every reported metric is drawn. */
   | { type: "history"; plantId: string; metrics?: string[] };
 
@@ -29,9 +31,18 @@ function generatedLayout(dashboard: DashboardResponse): WidgetSpec[] | null {
   return stops;
 }
 
+/** A garden with a forecast shows it once, just ahead of its notes unless the order says where; one without never does. */
+function withWeather(stops: WidgetSpec[], dashboard: DashboardResponse): WidgetSpec[] {
+  if (!dashboard.forecast) return stops.filter(stop => stop.type !== "weather");
+  if (stops.length === 0 || stops.some(stop => stop.type === "weather")) return stops;
+  const notes = stops.findIndex(stop => stop.type === "garden-notes");
+  return notes < 0 ? [...stops, { type: "weather" }] : [...stops.slice(0, notes), { type: "weather" }, ...stops.slice(notes)];
+}
+
 /** The stops of a garden's trail, or of one plant's page: as generated when there is such an order, else `defaultLayout`. */
 export function layoutFor(dashboard: DashboardResponse, overviews: PlantOverview[], plantId: string | null): WidgetSpec[] {
-  return (plantId ? null : generatedLayout(dashboard)) ?? defaultLayout(dashboard, overviews, plantId);
+  if (plantId) return defaultLayout(dashboard, overviews, plantId);
+  return withWeather(generatedLayout(dashboard) ?? defaultLayout(dashboard, overviews, null), dashboard);
 }
 
 /**

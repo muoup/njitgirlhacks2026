@@ -7,12 +7,14 @@ import type {
   ReadingsData as ReadingsResponse,
   NewPlantData as NewPlant, ApiKeyData as ApiKey, GardenResult as GardenResponse,
   ApiKeyResult as ApiKeyResponse, PlantedResult as PlantedResponse,
-  PlantEditData as PlantEdit, PlantResult as PlantResponse,
+  PlantEditData as PlantEdit, PlantResult as PlantResponse, GardenEditData as GardenEdit,
 } from "../../../../server/src/schemas";
+import type { AlertData as Alert, ForecastData as Forecast, ForecastDayData as ForecastDay, PlaceData as Place } from "../../../../server/src/weather";
 import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
   PendingActionData as PendingAction, DecisionData as DecisionResponse,
   RefreshData as RefreshResponse, OverviewData as PlantOverview } from "../../../../server/src/agent/schemas";
 export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, RefreshResponse, PlantOverview };
+export type { Alert, Forecast, ForecastDay, Place, GardenEdit };
 
 export type {
   Garden, Plant, PlantStatus, Device, Measurement, MetricInfo, Reading, InsightItem,
@@ -60,6 +62,10 @@ export interface GroveApi {
   // Reserved in the BFF; return 501 until the backend implements these actions.
   /** POST /gardens */
   createGarden(name: string): Promise<GardenResponse>;
+  /** PATCH /gardens/:id. Its name, whether it is indoors, and where it is; a null location forgets it. */
+  updateGarden(gardenId: string, edit: GardenEdit): Promise<GardenResponse>;
+  /** GET /places. Up to five towns matching a name or postcode. */
+  searchPlaces(query: string): Promise<{ places: Place[] }>;
   /** DELETE /gardens/:id. Takes the garden's plants, readings and keys with it. */
   removeGarden(gardenId: string): Promise<void>;
   /** POST /gardens/:id/plants. A new plant comes with its key. */

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { auth } from "@/lib/auth";
+import { useResource } from "@/lib/useResource";
 import { cn } from "@/lib/utils";
 
 type Mode = "signin" | "signup";
@@ -66,6 +67,9 @@ function AuthForm({ mode }: { mode: Mode }) {
   const copy = COPY[mode];
   const [busy, setBusy] = useState<"form" | "google" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Offered only once the server says it has Google's credentials, so it never shows and then goes.
+  const { resource: methods } = useResource(auth.methods, []);
+  const google = methods.status === "ready" && methods.data.google;
 
   // On success the session changes and the page redirects, so `busy` is only cleared on failure.
   async function run(kind: "form" | "google", action: () => Promise<void>) {
@@ -94,23 +98,27 @@ function AuthForm({ mode }: { mode: Mode }) {
       <h1 className="m-0 font-brush text-5xl leading-none font-normal text-grove-parchment">{copy.title}</h1>
       <p className="mt-2 mb-6 text-sm text-muted-foreground">{copy.lead}</p>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="lg"
-        className="w-full"
-        disabled={busy !== null}
-        onClick={() => run("google", auth.signInWithGoogle)}
-      >
-        <GoogleMark />
-        {busy === "google" ? "Opening Google…" : "Continue with Google"}
-      </Button>
+      {google && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            disabled={busy !== null}
+            onClick={() => run("google", auth.signInWithGoogle)}
+          >
+            <GoogleMark />
+            {busy === "google" ? "Opening Google…" : "Continue with Google"}
+          </Button>
 
-      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        or
-        <span className="h-px flex-1 bg-border" />
-      </div>
+          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
 
       <form onSubmit={submit} className="grid gap-4">
         {mode === "signup" && (
