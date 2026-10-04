@@ -1,9 +1,9 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { metricLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { LineChart } from "../LineChart";
+import { useMetrics } from "../metrics";
 import { Plaque, Skeleton } from "../Panel";
 import { type RangeId, RANGES, rangeOf, seriesByMetric, usePlantReadings } from "../readings";
 
@@ -12,6 +12,7 @@ export function History({ plantId, metrics, cut }: { plantId: string; metrics?: 
   const [rangeId, setRangeId] = useState<RangeId>("24h");
   const range = rangeOf(rangeId);
   const { resource, retry } = usePlantReadings(plantId, rangeId);
+  const catalogue = useMetrics();
 
   const toggle = (
     <div role="group" aria-label="Time range" className="flex rounded-lg border p-0.5">
@@ -51,21 +52,42 @@ export function History({ plantId, metrics, cut }: { plantId: string; metrics?: 
     );
   } else {
     const { from, to, readings } = resource.data;
-    const series = [...seriesByMetric(readings)].filter(([metric]) => !metrics || metrics.includes(metric));
-    body =
-      series.length > 0 ? (
+    const series = [...seriesByMetric(readings)]
+      .filter(([metric]) => !metrics || metrics.includes(metric))
+      .sort(([a], [b]) => catalogue.inOrder(a, b));
+    const charts = (core: boolean) => {
+      const drawn = series.filter(([metric]) => catalogue.isCore(metric) === core);
+      return drawn.length === 0 ? null : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))] gap-6">
-          {series.map(([metric, { unit, points }]) => (
+          {drawn.map(([metric, { unit, points }]) => (
             <LineChart
               key={metric}
-              title={metricLabel(metric)}
+              title={catalogue.label(metric)}
               unit={unit}
               points={points}
               from={Date.parse(from)}
               to={Date.parse(to)}
+              band={catalogue.info(metric)?.scale?.healthy}
             />
           ))}
         </div>
+      );
+    };
+    const rest = charts(false);
+    body =
+      series.length > 0 ? (
+        <>
+          {charts(true)}
+          {/* What else the monitor reports is kept out of the way until asked for. */}
+          {rest && (
+            <details className="mt-6 first:mt-0">
+              <summary className="w-fit cursor-pointer rounded-md px-1 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                More from the monitor
+              </summary>
+              <div className="mt-5">{rest}</div>
+            </details>
+          )}
+        </>
       ) : (
         <p className="m-0 rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
           No readings in the last {range.label}.

@@ -1,12 +1,11 @@
 import { useState } from "react";
 
-import { notBuilt } from "@/lib/api";
+import { NetworkError, notBuilt } from "@/lib/api";
 
 /** What to tell someone when a change could not be made. */
 export function failureMessage(error: unknown) {
   if (notBuilt(error)) return "The grove can't do this yet. It's waiting on the backend.";
-  // fetch rejects with a TypeError when the server cannot be reached at all.
-  if (error instanceof TypeError) return "Couldn't reach the server. Check your connection and try again.";
+  if (error instanceof NetworkError) return error.message;
   return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
 }
 

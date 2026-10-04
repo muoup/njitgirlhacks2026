@@ -1,12 +1,13 @@
 // Type-only imports share the validated BFF contract without bundling server code.
 import type {
   GardenData as Garden, PlantData as Plant, PlantStatusData as PlantStatus,
-  DeviceData as Device, MeasurementData as Measurement, ReadingData as Reading,
+  DeviceData as Device, MeasurementData as Measurement, MetricInfoData as MetricInfo, ReadingData as Reading,
   InsightItemData as InsightItem, InsightsData as Insights, MetaData as Meta,
   GardensData as GardensResponse, DashboardData as DashboardResponse,
   ReadingsData as ReadingsResponse,
   NewPlantData as NewPlant, ApiKeyData as ApiKey, GardenResult as GardenResponse,
   ApiKeyResult as ApiKeyResponse, PlantedResult as PlantedResponse,
+  PlantEditData as PlantEdit, PlantResult as PlantResponse,
 } from "../../../../server/src/schemas";
 import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
   PendingActionData as PendingAction, DecisionData as DecisionResponse,
@@ -14,15 +15,23 @@ import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
 export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, RefreshResponse, PlantOverview };
 
 export type {
-  Garden, Plant, PlantStatus, Device, Measurement, Reading, InsightItem,
+  Garden, Plant, PlantStatus, Device, Measurement, MetricInfo, Reading, InsightItem,
   Insights, Meta, GardensResponse, DashboardResponse, ReadingsResponse,
-  NewPlant, ApiKey, GardenResponse, ApiKeyResponse, PlantedResponse,
+  NewPlant, ApiKey, GardenResponse, ApiKeyResponse, PlantedResponse, PlantEdit, PlantResponse,
 };
 
 /** A non-2xx answer carrying the BFF error code and message. */
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
     super(message);
+  }
+}
+
+/** The browser could not receive an HTTP response (network, CORS, or a dropped connection). */
+export class NetworkError extends Error {
+  constructor(cause: unknown) {
+    super("Couldn't reach the server. Check your connection and try again.", { cause });
+    this.name = "NetworkError";
   }
 }
 
@@ -43,6 +52,8 @@ export interface GroveApi {
   refreshInsights(): Promise<RefreshResponse>;
   listGardens(): Promise<GardensResponse>;
   getDashboard(gardenId: string): Promise<DashboardResponse>;
+  /** The metric catalogue, for pages that draw readings without a dashboard. */
+  listMetrics(): Promise<{ metrics: MetricInfo[] }>;
   /** The BFF accepts an ordered range of at most seven days. */
   getPlantReadings(plantId: string, from: Date, to: Date): Promise<ReadingsResponse>;
 
@@ -53,6 +64,8 @@ export interface GroveApi {
   removeGarden(gardenId: string): Promise<void>;
   /** POST /gardens/:id/plants. A new plant comes with its key. */
   createPlant(gardenId: string, plant: NewPlant): Promise<PlantedResponse>;
+  /** PATCH /plants/:id. Its readings and its key stay as they are. */
+  updatePlant(plantId: string, edit: PlantEdit): Promise<PlantResponse>;
   /** DELETE /plants/:id */
   removePlant(plantId: string): Promise<void>;
   /** GET /plants/:id/api-keys */

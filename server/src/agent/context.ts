@@ -17,6 +17,9 @@ export function summarize(readings: ReadingData[]) {
     metric: key.split("\0")[0]!, unit: samples[0]!.unit, samples: samples.length,
     first: samples[0]!, last: samples.at(-1)!,
     min: Math.min(...samples.map(sample => sample.value)), max: Math.max(...samples.map(sample => sample.value)),
+    // When the extremes were reached, so that a chart can point at them.
+    lowest: samples.reduce((low, sample) => sample.value < low.value ? sample : low),
+    highest: samples.reduce((high, sample) => sample.value > high.value ? sample : high),
     mean: samples.reduce((sum, sample) => sum + sample.value, 0) / samples.length,
     change: samples.at(-1)!.value - samples[0]!.value,
   }));
@@ -29,7 +32,7 @@ export interface AccountContext {
     garden: DashboardData["garden"]; plants: DashboardData["plants"];
     devices: DashboardData["devices"]; latestReadings: DashboardData["latestReadings"];
     source: "mock" | "backend";
-    histories: Array<{ plantId: string; digest: string; metrics: ReturnType<typeof summarize> }>;
+    histories: Array<{ plantId: string; digest: string; metrics: ReturnType<typeof summarize>; sampling?: { method: "last"; bucketSeconds: number } }>;
   }>;
 }
 
@@ -58,6 +61,7 @@ export async function buildContext(backend: BackendAdapter, identity: BackendIde
       const history = await backend.getReadings(identity, plant.id, range);
       const readings = history?.readings ?? [];
       histories.push({ plantId: plant.id, metrics: summarize(readings),
+        ...(history?.sampling ? { sampling: history.sampling } : {}),
         digest: new Bun.CryptoHasher("sha256").update(JSON.stringify(readings)).digest("hex") });
     }
     context.gardens.push({ garden: dashboard.garden, plants: dashboard.plants, devices: dashboard.devices,

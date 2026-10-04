@@ -1,16 +1,7 @@
 import type { Measurement } from "@/lib/api";
 
-// What the grove calls the metrics it knows. Each still says plainly what was measured.
-const METRIC_NAMES: Record<string, string> = {
-  soil_moisture: "Soil damp",
-  temperature: "Warmth",
-  humidity: "Air damp",
-};
-
-/** "soil_moisture" → "Soil damp". A metric the grove has no name for is shown as the API gives it: "Light level". */
+/** "light_level" → "Light level": a name for a metric the garden's catalogue does not list. */
 export function metricLabel(metric: string) {
-  const known = METRIC_NAMES[metric];
-  if (known) return known;
   const words = metric.replace(/[_-]+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -19,9 +10,9 @@ export function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-/** "21%", "19.5 °C": percent hugs the number, other units take a space. */
+/** "21%", "19.5 °C", "50": percent hugs the number, other units take a space, and a plain number has none. */
 export function formatMeasurement({ value, unit }: Pick<Measurement, "value" | "unit">) {
-  return unit === "%" ? `${formatNumber(value)}%` : `${formatNumber(value)} ${unit}`;
+  return unit === "%" || !unit ? `${formatNumber(value)}${unit}` : `${formatNumber(value)} ${unit}`;
 }
 
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
@@ -37,9 +28,16 @@ export function timeAgo(timestamp: string, now = Date.now()) {
   return relative.format(Math.round(hours / 24), "day");
 }
 
+/** "5 hours", "2 days": how long a stretch of readings covers, to the nearest whole unit. */
+export function spanInWords(milliseconds: number) {
+  const hours = Math.max(Math.round(milliseconds / 3_600_000), 1);
+  if (hours < 36) return hours === 1 ? "an hour" : `${hours} hours`;
+  return `${Math.round(hours / 24)} days`;
+}
+
 /** "53%", "23°", "410 ppm": a whole number with the shortest unit that still reads, for tight spaces. */
 export function compactMeasurement({ value, unit }: Pick<Measurement, "value" | "unit">) {
   const rounded = Math.round(value);
-  if (unit === "%") return `${rounded}%`;
+  if (unit === "%" || !unit) return `${rounded}${unit}`;
   return unit.startsWith("°") ? `${rounded}°` : `${rounded} ${unit}`;
 }

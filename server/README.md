@@ -1,239 +1,145 @@
-# Grove BFF v0
+# Grove server
 
-A standalone Bun/Elysia server for frontend development. Better Auth owns browser
-authentication. An injected backend adapter hydrates dashboard data; the default
-adapter generates deterministic, account-scoped fixtures. Gemini chat and scheduled
-insights use a shared agent harness. Domain mutations, durable storage, and Arduino
-ingestion remain backend integration work; no local database or memory files are used.
+Bun/Elysia application backend with Better Auth browser sessions, Tiger Cloud /
+PostgreSQL storage, plant API-key sensor ingestion, and Gemini chat/scheduled
+insights. Without database configuration, development still uses the original
+account-scoped fixtures and in-memory auth.
 
 ## Run
 
-```sh
+```bash
 cd server
-bun install
-cp .env.example .env
+bun install --frozen-lockfile
+# Edit .env using .env.example; keep existing secrets/settings.
 bun run dev
 ```
 
-Defaults: frontend `http://localhost:3000`, BFF `http://localhost:3001`.
+For the real VM deployment, follow [TIGER_SETUP.md](TIGER_SETUP.md), then run
+`./prod.sh` from the repo root. `./prod.sh --demo` explicitly ignores DATABASE_URL
+and uses fixtures. Each service loads its own environment files, not root .env.
 
-- Interactive OpenAPI docs: `http://localhost:3001/openapi`
-- Live JSON specification: `http://localhost:3001/openapi/json`
-- Checked-in specification: `openapi.json`; regenerate with `bun run openapi:generate`.
-- Checks: `bun run typecheck` and `bun test`.
+Defaults: frontend http://localhost:3000, server http://localhost:3001.
 
-`FRONTEND_ORIGINS` accepts comma-separated, explicit origins. Configure
-`BETTER_AUTH_URL` to the BFF origin and set `BETTER_AUTH_SECRET` to a high-entropy
-value of at least 32 characters. Bun loads `.env` automatically.
+- Interactive docs: `/openapi`.
+- Live OpenAPI JSON: `/openapi/json`.
+- Generate a local specification: `bun run openapi:generate` (no DB/model calls).
+- Checks: `bun run typecheck`, `bun test`.
+- Database setup: `bun run db:migrate`, `bun run db:check`, `bun run db:timescale`.
+- Forgotten password: `bun run auth:password EMAIL` asks for a new one and stores it.
 
-## Authentication
+## Storage and authentication
 
-The v0 uses Better Auth's **development-only in-memory adapter**. Signup, login,
-session validation, and logout work, but accounts and sessions disappear when
-the process restarts. By default, startup seeds `demo@grove.local` with password
-`GroveDemo2026!`. Disable that account with `SEED_DEMO_ACCOUNT=false`.
+DATABASE_URL selects `PostgresBackend` and Better Auth's PostgreSQL adapter using
+one pool. Migrations isolate Better Auth tables in `auth` and application tables
+in `grove`. Startup validates connectivity/schema; migrations run only when
+explicitly invoked. PostgreSQL 14+ works; the manual TimescaleDB conversion makes
+sensor_readings a hypertable. No local production database or MEMORY.md files
+are used. New database accounts start with no gardens or plants.
 
-For Google login, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Register
-`http://localhost:3001/api/auth/callback/google` as the local OAuth redirect URI.
-Google login is unavailable until those credentials are configured. Email
-verification and password-recovery delivery are outside this scaffold.
+BETTER_AUTH_SECRET must be stable and at least 32 characters. Database mode also
+requires DEVICE_API_KEY_ENCRYPTION_KEY: 32 independent random bytes in base64.
+Database URLs and firmware keys never reach the agent. Garden/plant ownership is
+scoped by the Better Auth user ID in SQL; the identity comes from the session.
 
-Use Better Auth's React client in the frontend:
+Set BETTER_AUTH_URL to the public API origin and FRONTEND_ORIGINS to explicit
+comma-separated frontend origins. Use HTTPS and frontend/API origins under the
+same domain for the current cookie setup. The frontend uses Better Auth's React
+client and sends credentials with domain requests. BUN_PUBLIC_API_URL is required
+in frontend/.env and is bundled into browser assets.
 
-```ts
-import { createAuthClient } from "better-auth/react";
+Google sign-in is optional and uses GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET for a
+Web application OAuth client. Register the public API's
+`/api/auth/callback/google` URL. Gemini credentials are separate. Email/password
+signup/login works without Google. Verification/password-reset email delivery is
+not configured. A forgotten password is replaced from the server instead, with
+`bun run auth:password EMAIL`: it needs `server/.env`, so only whoever runs the
+server can use it. An account made with Google gains a password this way.
 
-export const authClient = createAuthClient({ baseURL: "http://localhost:3001" });
+In fixture mode, auth/accounts/sessions disappear on restart. Development seeds
+`demo@grove.local` / `GroveDemo2026!` unless SEED_DEMO_ACCOUNT=false. The public demo
+is never seeded in database mode or ordinary production.
 
-await authClient.signIn.email({ email, password });
-await authClient.signUp.email({ name, email, password });
-await authClient.signIn.social({ provider: "google", callbackURL: "http://localhost:3000/dashboard" });
-await authClient.signOut();
-```
+## Browser API
 
-The frontend already uses Better Auth's React client. Its required
-`BUN_PUBLIC_API_URL` setting selects this BFF's origin. For domain requests, send
-`credentials: "include"`; do not store or manually forward the session token.
-The BFF's auth records remain separate from backend domain data.
+| Route | Behavior |
+| --- | --- |
+| GET /api/v1/me | Current user/account |
+| GET /api/v1/gardens | Account gardens with plant/device counts |
+| POST /api/v1/gardens | Create `{ name }`, returns 201 `{ garden }` |
+| DELETE /api/v1/gardens/:id | Delete garden, plants, devices, readings, keys; 204 |
+| POST /api/v1/gardens/:id/plants | Create `{ name, species }`, device and key; 201 `{ plant, apiKey }` |
+| PATCH /api/v1/plants/:id | Change name and/or species; readings and key are kept; 200 |
+| DELETE /api/v1/plants/:id | Delete plant/device/readings/key; 204 |
+| GET /api/v1/dashboard?gardenId=... | Garden, plants/devices, latest samples, insights |
+| GET /api/v1/plants/:id/readings?from=...&to=... | Inclusive ISO range, at most 7 days |
+| GET /api/v1/gardens/:id/insights | Saved insight output and generation metadata |
+| GET /api/v1/plants/:id/api-keys | Owner-only retrieval of recoverable encrypted key |
+| POST /api/v1/plants/:id/api-keys | Rotate key; old credential stops working |
 
-## Hydration contract
+Browser routes require a session. Unknown/inaccessible resources return 404.
+Resource mutations check request origin. Creation/deletion optionally accept
+Idempotency-Key; account-scoped database transactions persist replay results and
+reject reuse for different arguments. Secret responses use Cache-Control:no-store.
+The mock adapter still returns 501 for resource/key changes.
 
-1. Read the signed-in account with `GET /api/v1/me`.
-2. Fetch `GET /api/v1/gardens` and choose a returned garden ID.
-3. Fetch `GET /api/v1/dashboard?gardenId=...` for that garden's plants, devices,
-   latest readings, and existing insights.
-4. Fetch graph history separately using
-   `GET /api/v1/plants/:id/readings?from=<ISO timestamp>&to=<ISO timestamp>`.
-   Ranges are inclusive and limited to seven days; fixture points are hourly.
-5. Fetch existing insights with `GET /api/v1/gardens/:id/insights`.
+Stored readings keep the firmware's measurement array and units; responses show
+them calibrated (see `src/metrics.ts` and the Dashboard history section of
+FIRMWARE_API.md).
+Latest samples are unsampled. History selects at most 361 actual samples, the
+last per time bucket (at least 60 seconds), and includes optional sampling
+metadata. Full raw samples remain stored. Plants have no assessed status until
+there is evidence; sample receipt is not a health diagnosis.
 
-Domain responses mark `meta.source` as `mock` and include `meta.hydratedAt`.
-The mock adapter supplies three gardens and seven plants, with healthy plants,
-a plant needing care, a plant without readings or assessed health, an unheard-
-from device, and an empty garden. These fixtures live entirely in the BFF.
+## Arduino API
 
-`Plant.status` is optional (`healthy` or `needs_care`); omission means unassessed.
-Each insight has an explicit `needsFollowUp` boolean. Insights are plain text,
-never generated markup. The empty garden returns `status: "unavailable"`,
-`generatedAt: null`, and an empty item list. Sensor names and units are provisional.
+`POST /api/v1/ingest/readings` accepts a plant API key in Authorization:Bearer,
+without browser cookies. Keys scope uploads to their plant/device/account; body
+IDs cannot redirect data. One sample per request, stable sampleId for retries,
+optional measuredAt, and a bounded measurements array. New samples return 201;
+identical retries 200; changed payloads with the same ID 409. Rotation/deletion
+revokes credentials. Uploads store samples/device activity and dirty insights
+without calling Gemini.
 
-Mock monitors report on UTC hour boundaries with a four-minute delay. Latest
-readings and history share one value generator, so values at the same timestamp
-agree across requests. Histories exclude samples that have not reported yet.
-The adapter captures a trend reference time on startup and accepts an injectable
-clock for tests. Initial fixture insights are timestamped two hours before that
-reference; generated insights replace them in BFF responses once refreshed. The
-frontend imports response types from `src/schemas.ts` and `src/agent/schemas.ts`
-with type-only imports.
-
-Domain errors have shape `{ "error": { "code": "...", "message": "..." } }`.
-Malformed schemas return 422, invalid time ranges 400, absent sessions 401, and
-missing or inaccessible resources 404. Better Auth endpoints retain Better Auth's
-native error format, which is included in the merged OpenAPI document.
+Supported metrics match origin/sensor_reading_prototype at cabe772: raw soil,
+air-quality, light, pressure, temperature, altitude, and clear/R/G/B channels.
+See [FIRMWARE_API.md](FIRMWARE_API.md) for exact units, payloads, limits, and retries.
+Bodies are limited to 16 KiB and ingestion to 120 requests/minute/key/process.
 
 ## Garden mentor
 
-Set `GOOGLE_VERTEX_PROJECT` in `server/.env` to the Cloud project ID linked to
-your intended billing account. `GOOGLE_VERTEX_LOCATION` defaults to `global`.
-Configure Google Application Default Credentials (ADC), then restart the BFF.
-The model is fixed to `gemini-3.8-flash`, with `thinkingLevel: "medium"`, through
-Vercel's AI SDK Vertex provider. Requests target `aiplatform.googleapis.com` with
-OAuth credentials and a project-scoped path. There is no Developer API fallback;
-`GEMINI_API_KEY` and express-mode `GOOGLE_VERTEX_API_KEY` are not used. Missing
-project configuration returns 503 `AGENT_NOT_CONFIGURED`. Auth and domain routes
-remain usable without agent configuration.
+Set GOOGLE_VERTEX_PROJECT and Google Application Default Credentials; location
+defaults to global. The model stays gemini-3.8-flash with medium thinking through
+the Vertex AI provider. GEMINI_API_KEY / GOOGLE_VERTEX_API_KEY are ignored. See
+[VERTEX_SETUP.md](VERTEX_SETUP.md); `bun run agent:check` makes one small billable
+request to verify credentials. Tests and OpenAPI generation do not call Google.
 
-See [VERTEX_SETUP.md](VERTEX_SETUP.md) for Google Cloud console, local login, and
-trial-credit checks. Google Cloud now labels Vertex AI as Gemini Enterprise Agent
-Platform in its console/documentation; the API service remains
-`aiplatform.googleapis.com`. New $300 welcome credits exclude AI Studio's Gemini
-Developer API. Selecting Vertex does not verify your billing account or credit
-eligibility; confirm the project/account link and credit application in Cloud Billing.
+| Route | Behavior |
+| --- | --- |
+| POST /api/v1/chat | `{message,persona,requestId,conversationId?}`; shared account context |
+| POST /api/v1/chat/actions/:id/decision | Approve/cancel one exact proposed action |
+| POST /api/v1/insights/refresh | Force restricted account-wide generation immediately |
 
-After setup, run `cd server` then `bun run agent:check`. This makes one small
-billable model request without garden data or tools, prints token usage on success,
-and returns a nonzero exit code plus safe diagnostics on failure. It never runs
-automatically on startup, during tests, or while generating OpenAPI.
+All require sessions and origin checks. Agent context includes all gardens,
+latest readings, bounded 7-day history summaries, and revisioned account memory.
+Skills guide prescriptions. Chat can propose additions/removals; only explicit
+user approval executes them. Cron/forced refresh can update memory/insights but
+cannot mutate garden/plant resources. Keys never enter tool results or chat.
 
-Provider failures print `BFF failure` diagnostics to the server terminal/stderr,
-including HTTP status, Google status/reason codes, and the SDK cause stack frames.
-Cron uses the same diagnostics. Request bodies, raw response bodies, exception
-messages, chat content, and memory are excluded from logs; URL queries and known
-keys are redacted. Browser errors remain generic. The startup `Garden mentor`
-line reports the selected project/location; credentials and Cloud permissions are
-checked on the first model request, not startup. Missing ADC, disabled APIs, and
-IAM failures have specific setup hints. Put project settings in `server/.env` or
-the launch environment; the root `.env` is not loaded by `dev.sh`.
+The worker runs every 30 minutes. Database mode rediscovers accounts active in
+the last 24 hours, including firmware activity; successful insights and failure
+metadata survive restart. A refresh skips unchanged fresh input, while forced
+refresh always runs. New readings/resources/memory dirty results; concurrent data
+changes remain stale even if generation succeeds. Saved insights survive errors.
 
-Chat and scheduled runs share account-wide context: all gardens, plant records,
-latest readings, deterministic summaries of seven days of history, and MEMORY.md.
-Prewritten guidance lives in `skills/`. Model context excludes firmware keys and
-auth credentials. Tools read account data, read/update memory, and load skills.
-Only chat can propose garden/plant additions or removals. Scheduled runs have no
-mutation tools and cannot create approvals. Tool loops are capped at eight steps,
-32 tool calls, 6,000 output tokens, and a 60-second model timeout; at most four
-accounts run concurrently and an account cannot have overlapping agent work.
+Conversations, approvals, and concurrency controls remain process-local. Run one
+backend instance. Loops keep their existing 8-step/32-tool/60-second limits and
+at most 4 concurrent accounts. Retention/compression and multi-instance scheduling
+are future work. See [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md).
 
-| Route | Body | Result |
-| --- | --- | --- |
-| `POST /api/v1/chat` | `{ message, persona, requestId, conversationId? }` | `{ conversationId, reply, pendingActions, contextRevision }` |
-| `POST /api/v1/chat/actions/:id/decision` | `{ decision: "approve" \| "cancel" }` | `{ action }` |
-| `POST /api/v1/insights/refresh` | `{}` or no body | `{ refreshed, generatedAt, gardenIds }` |
+## Failure diagnostics
 
-All three routes require a Better Auth session. Browser callers send credentials
-and must use a configured frontend origin or the BFF's own origin. Chat responses
-and action decisions use `Cache-Control: no-store`. The chat message limit is 500
-characters. Conversations and request deduplication are ephemeral and expire
-after an hour. Retry a message with the same request ID and identical body to
-receive the prior successful response without another model call.
-
-Pending actions expire after ten minutes. Approving executes the stored arguments
-after rechecking ownership and target state; cancellation never executes it.
-Decisions cannot replace action arguments. Repeated decisions do not execute twice
-within this process. The frontend renders approval cards in both chat views and
-refreshes data after a successful change. While mutations are stubbed, an approved
-action returns HTTP 200 with `action.status: "failed"` and result code
-`NOT_IMPLEMENTED`; HTTP success here means the decision was processed.
-
-The listening entry point starts a worker every 30 minutes when a project is configured.
-It processes accounts seen in authenticated requests during the last 24 hours.
-It rebuilds context and generates only when inputs change, the last result is at
-least an hour old, or the previous refresh failed. Fetch time alone does not count
-as an input change. `AGENT_SCHEDULE_ENABLED=false` disables the periodic worker,
-while manual refresh remains available. App factories, tests, and OpenAPI generation
-do not start the worker or make model calls on startup.
-
-**Force a refresh immediately:** use the frontend's **Refresh garden insights**
-button, or call `POST /api/v1/insights/refresh` with your session cookie. This awaits
-generation for all account gardens and bypasses the unchanged-input cache, using
-the same restricted scheduled harness. For example, run this in the frontend's
-browser console while signed in:
-
-```js
-await fetch("http://localhost:3001/api/v1/insights/refresh", {
-  method: "POST",
-  credentials: "include",
-  headers: { "Content-Type": "application/json" },
-  body: "{}",
-}).then(response => response.json());
-```
-
-Dashboard and insight responses preserve their existing fields, with optional
-`insights.overviews` and `insights.generation` metadata. Overviews use the existing
-readings/chart renderer and include evidence windows. The BFF rejects invented
-plant IDs, unavailable metrics, unsupported evidence ranges, and assessed urgency
-for unmeasured plants. Failed refreshes retain the last successful insights and
-expose failure metadata. The frontend uses fixture-based presentation until the
-first generated result is available. Sample readings remain marked as mock even
-when insights are generated by Gemini.
-
-The cache, approvals, conversations, registry, and mock memory disappear on restart.
-This worker is for one BFF process; durable scheduling and backend idempotency are
-still integration work. See [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md) for the backend
-memory and mutation handoff.
-
-## Backend and firmware protocol boundary
-
-Implement `BackendAdapter` in `src/backend.ts` once the teammate's API exists,
-then pass it to `createApp({ backend })`. Every adapter call receives a server-
-derived `{ version: "v1", userId, accountId }`. For now the account ID equals the
-Better Auth user ID. This is internal identity context, **not an auth token**.
-The future backend must verify an agreed signed/service credential before
-trusting identity and use the stable account ID to scope its data. Token claims,
-signing keys, issuer, audience, expiry, and transport are TBD. Browser session
-tokens are not assumed to be backend tokens.
-
-The potting shed routes are authenticated placeholders. Valid requests return
-501 `NOT_IMPLEMENTED` without changing fixtures or issuing keys. Resource routes
-first check account ownership (missing or inaccessible IDs return 404); creation
-bodies require nonblank names and species. The frontend shares these types from
-`src/schemas.ts` and already handles 501 as waiting for the backend.
-
-| Route | Request | Future success |
-| --- | --- | --- |
-| `POST /api/v1/gardens` | `{ name }` | 201 `{ garden }` |
-| `DELETE /api/v1/gardens/:id` | — | 204, no body |
-| `POST /api/v1/gardens/:id/plants` | `{ name, species }` | 201 `{ plant, apiKey }` |
-| `DELETE /api/v1/plants/:id` | — | 204, no body |
-| `GET /api/v1/plants/:id/api-keys` | — | 200 `{ apiKey }` |
-| `POST /api/v1/plants/:id/api-keys` | — | 200 `{ apiKey }` |
-
-The proposed `apiKey` shape is `{ key, createdAt }`, with an ISO timestamp. Key
-responses use `Cache-Control: no-store`. The backend owns firmware key issuance,
-storage, rotation, and upload authentication. Retrieving existing secrets is
-provisional until the backend confirms its storage protocol. Replacement is
-intended to invalidate the previous key; garden removal is intended to cascade
-to plants, readings, and keys. None of these actions occur in this v0. Browser
-CORS allows GET, POST, DELETE, and OPTIONS from the configured frontend origins.
-
-For durable authentication, inject a supported Better Auth database adapter via
-`createApp({ authDatabase, backend })`. No database technology has been selected.
-The default entry point refuses production execution until real backend and auth
-storage adapters have been configured. Demo seeding is disabled in production.
-For an explicit VM deployment of the current ephemeral scaffold, use
-`./prod.sh --demo` from the repo root; this enables `ALLOW_DEMO_IN_PRODUCTION`
-while keeping production settings and the required auth secret. See
-[deployment instructions](../DEPLOYMENT.md) for public URLs and ports.
-
-Implementing backend mutations, durable scheduling/storage, and richer dynamic UI
-remain later work.
+Server/provider/cron failures print safe BFF failure traces to stderr: codes,
+HTTP status, safe Google reasons, and stack frames. Messages, request/response
+bodies, database URLs, credential headers, API keys, and chat/memory are excluded.
+Browser errors retain documented `{ error: { code, message } }` shapes; Better
+Auth routes retain Better Auth's native error format.

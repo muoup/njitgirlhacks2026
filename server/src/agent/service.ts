@@ -7,6 +7,8 @@ import { ApiError } from "../errors";
 import { logFailure } from "../diagnostics";
 import { buildContext, revision, type AccountContext } from "./context";
 import { readSkill, skillNames } from "./skills";
+import { LIMITS, proseProblems } from "./writing";
+import { describeBlock, publishable } from "./blocks";
 import type { AgentRunner, AgentTool, RunInput } from "./runner";
 import * as s from "./schemas";
 
@@ -22,6 +24,39 @@ interface Cache {
   revision: string; generatedAt: number; dirty: boolean;
   gardens: Map<string, { insights: InsightsData; fingerprint: string }>;
 }
+const accountIds = (context: AccountContext) =>
+  context.gardens.flatMap(item => [item.garden.id, ...item.plants.map(plant => plant.id), ...item.devices.map(device => device.id)]);
+
+/**
+ * The order of a garden's stops as generated, or nothing when the page should decide. An
+ * order is kept only if every plant has exactly one place, the plants that call for someone
+ * each have a stop of their own ahead of everything else, and no kind of group repeats.
+ */
+function trail(layout: s.InsightOutputData["gardens"][number]["layout"], overviews: s.OverviewData[]): s.StopData[] | undefined {
+  if (!layout?.length) return undefined;
+  const stops: s.StopData[] = [];
+  const placed = new Set<string>();
+  const place = (plantId: string) => overviews.some(overview => overview.plantId === plantId) && !placed.has(plantId) && Boolean(placed.add(plantId));
+  for (const stop of layout) {
+    if (stop.type === "plant") {
+      if (!stop.plantId || !place(stop.plantId)) return undefined;
+      stops.push({ type: "plant", plantId: stop.plantId });
+    } else if (stop.type === "calm-plants") {
+      if (!stop.plantIds?.length || stops.some(item => item.type === "calm-plants") || !stop.plantIds.every(place)) return undefined;
+      stops.push({ type: "calm-plants", plantIds: stop.plantIds });
+    } else {
+      if (stops.some(item => item.type === "garden-notes")) return undefined;
+      stops.push({ type: "garden-notes" });
+    }
+  }
+  if (placed.size !== overviews.length) return undefined;
+  const calls = overviews.filter(overview => overview.urgency === "act");
+  const first = stops.slice(0, calls.length);
+  if (!calls.every(overview => first.some(stop => stop.type === "plant" && stop.plantId === overview.plantId))) return undefined;
+  // The garden's own notes are always reachable.
+  return stops.some(stop => stop.type === "garden-notes") ? stops : [...stops, { type: "garden-notes" }];
+}
+
 const gardenFingerprint = (garden: Pick<AccountContext["gardens"][number], "garden" | "plants" | "devices" | "latestReadings">) =>
   JSON.stringify({ garden: garden.garden, plants: garden.plants, devices: garden.devices, latestReadings: garden.latestReadings });
 
@@ -43,6 +78,7 @@ export class AgentService {
   }
 
   get configured() { return Boolean(this.runner); }
+  invalidate(identity: BackendIdentity) { this.cache.delete(identity.accountId); }
 
   register(identity: BackendIdentity) {
     this.cleanup();
@@ -125,9 +161,12 @@ export class AgentService {
           if (cached) cached.dirty = true;
           return memory;
         }),
-      loadSkill: definition("Read a prewritten care or memory skill.", t.Object({ name: t.Union(skillNames.map(name => t.Literal(name))) }),
-        async ({ name }) => ({ name, markdown: await readSkill(name) })),
     };
+    // A scheduled run is given every skill in its instructions.
+    if (input.mode === "chat") {
+      tools.loadSkill = definition("Read a prewritten care or memory skill.", t.Object({ name: t.Union(skillNames.map(name => t.Literal(name))) }),
+        async ({ name }) => ({ name, markdown: await readSkill(name) }));
+    }
     if (input.mode === "chat" && conversationId) {
       tools.proposeAction = definition("Propose ONE garden/plant addition or removal for a user's approval popup. Does not execute it.",
         s.Mutation, async (action: s.MutationData) => {
@@ -183,11 +222,19 @@ export class AgentService {
       const output = await this.run({ mode: "chat", persona: request.persona, context, history }, identity, proposed, conversationId);
       if (!Value.Check(s.ChatOutput, output)) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "The mentor returned an invalid response.");
       for (const action of proposed) this.actions.set(action.public.id, action);
-      conversation.history = [...history, { role: "assistant" as const, content: output.reply }].slice(-20);
+      const named = context.gardens.flatMap(garden => garden.plants);
+      const blocks = publishable(output.blocks ?? [], { max: 2, now: Date.parse(context.observedAt), ids: accountIds(context),
+        plants: new Map(context.gardens.flatMap(garden => garden.histories.map(history => [history.plantId, history.metrics]))) });
+      const name = (plantId: string) => named.find(plant => plant.id === plantId)?.name ?? "a plant";
+      // The mentor is told what it showed, so a later turn can refer to it.
+      const shown = blocks.length ? `\n[Shown under this reply: ${blocks.map(block => describeBlock(block, name)).join("; ")}]` : "";
+      conversation.history = [...history, { role: "assistant" as const, content: output.reply + shown }].slice(-20);
       conversation.updatedAt = this.clock();
       this.conversations.set(conversationId, conversation);
       const response: s.ChatResponseData = { conversationId, reply: output.reply,
-        pendingActions: proposed.map(action => structuredClone(action.public)), contextRevision: revision(context) };
+        pendingActions: proposed.map(action => structuredClone(action.public)), contextRevision: revision(context), blocks,
+        plants: named.filter(plant => blocks.some(block => "plantId" in block && block.plantId === plant.id))
+          .map(plant => ({ id: plant.id, name: plant.name })) };
       this.replies.set(requestKey, { input: inputKey, response: structuredClone(response), at: this.clock() });
       return response;
     });
@@ -221,34 +268,54 @@ export class AgentService {
     });
   }
 
-  private validateInsights(output: unknown, context: AccountContext): asserts output is s.InsightOutputData {
-    if (!Value.Check(s.InsightOutput, output)) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated insights do not match the schema.");
+  /** Everything wrong with a generated set of insights, worded so the model can correct it. Empty when it can be published. */
+  private insightProblems(output: unknown, context: AccountContext): string[] {
+    if (!Value.Check(s.InsightOutput, output)) return ["Generated insights do not match the schema."];
+    const problems: string[] = [];
+    const ids = accountIds(context);
     const seen = new Set<string>();
     for (const generated of output.gardens) {
       const garden = context.gardens.find(item => item.garden.id === generated.gardenId);
-      if (!garden || seen.has(generated.gardenId)) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated insights referenced an invalid garden.");
+      if (!garden || seen.has(generated.gardenId)) { problems.push("Generated insights referenced an invalid garden."); continue; }
       seen.add(generated.gardenId);
       const plants = new Set<string>();
       for (const overview of generated.overviews) {
         const plant = garden.plants.find(item => item.id === overview.plantId);
-        if (!plant || plants.has(plant.id)) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated insights referenced an invalid plant.");
+        if (!plant || plants.has(plant.id)) { problems.push("Generated insights referenced an invalid plant."); continue; }
         plants.add(plant.id);
         const metrics = garden.histories.find(item => item.plantId === plant.id)?.metrics ?? [];
-        if (!metrics.length && overview.urgency !== null) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Unmeasured plants must remain unassessed.");
+        if (!metrics.length && overview.urgency !== null) problems.push(`Unmeasured plants must remain unassessed: ${plant.name}.`);
         if ((overview.urgency !== null && !overview.evidence.length) || overview.evidence.some(evidence => {
           const metric = metrics.find(metric => metric.metric === evidence.metric && metric.unit === evidence.unit);
           return !metric || Date.parse(evidence.from) > Date.parse(evidence.to) ||
             Date.parse(evidence.from) < Date.parse(metric.first.at) || Date.parse(evidence.to) > Date.parse(metric.last.at);
-        })) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated insights referenced unsupported evidence.");
-        if (overview.blocks.some(block => !metrics.length || (block.type === "chart" && block.metric && !metrics.some(metric => metric.metric === block.metric)))) {
-          throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated chart blocks referenced unavailable measurements.");
-        }
+        })) problems.push(`Generated insights referenced unsupported evidence for ${plant.name}: each needs a metric and unit from that plant's history and a window inside it.`);
+        if (!overview.headline.trim()) problems.push(`The headline for ${plant.name} is empty.`);
+        problems.push(...proseProblems(`The headline for ${plant.name}`, overview.headline, LIMITS.headline, ids),
+          ...proseProblems(`The text for ${plant.name}`, overview.text, LIMITS.text, ids));
       }
       if (plants.size !== garden.plants.length || generated.items.some(item => item.plantId !== null && !plants.has(item.plantId))) {
-        throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated insights must cover the garden's plants.");
+        problems.push("Generated insights must cover the garden's plants.");
       }
+      for (const item of generated.items) problems.push(...proseProblems(`A note for ${garden.garden.name}`, item.text, LIMITS.text, ids));
     }
-    if (seen.size !== context.gardens.length) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "Generated insights must cover all gardens.");
+    if (seen.size !== context.gardens.length) problems.push("Generated insights must cover all gardens.");
+    return problems;
+  }
+
+  /** One scheduled run, with a single chance for the model to correct output that cannot be published. */
+  private async generate(context: AccountContext, identity: BackendIdentity): Promise<s.InsightOutputData> {
+    let output = await this.run({ mode: "scheduled", context, history: [] }, identity, []);
+    let problems = this.insightProblems(output, context);
+    if (problems.length) {
+      output = await this.run({ mode: "scheduled", context, history: [
+        { role: "assistant", content: JSON.stringify(output) },
+        { role: "user", content: `That output cannot be published:\n${problems.slice(0, 20).map(problem => `- ${problem}`).join("\n")}\nReturn the complete output again with these corrected.` },
+      ] }, identity, []);
+      problems = this.insightProblems(output, context);
+    }
+    if (problems.length) throw new ApiError(502, "INVALID_AGENT_OUTPUT", problems[0]!);
+    return output as s.InsightOutputData;
   }
 
   async refresh(identity: BackendIdentity, force = true): Promise<s.RefreshData> {
@@ -260,6 +327,10 @@ export class AgentService {
       this.refreshing.add(identity.accountId);
       try {
         if (!this.runner) throw new ApiError(503, "AGENT_NOT_CONFIGURED", "Set GOOGLE_VERTEX_PROJECT and configure Google Application Default Credentials on the BFF to enable insights.");
+        await this.backend.recordInsightAttempt?.(identity, now);
+        const persisted = await this.backend.readInsightSnapshot?.(identity);
+        if (persisted) this.cache.set(identity.accountId, { ...persisted,
+          gardens: new Map(persisted.gardens.map(g => [g.insights.gardenId, g])) });
         const context = await buildContext(this.backend, identity, now);
         const inputRevision = revision(context);
         const previous = this.cache.get(identity.accountId);
@@ -267,27 +338,42 @@ export class AgentService {
           previous.revision === inputRevision && now - previous.generatedAt < HOUR) {
           return { refreshed: false, generatedAt: new Date(previous.generatedAt).toISOString(), gardenIds: [...previous.gardens.keys()] };
         }
-        const output = await this.run({ mode: "scheduled", context, history: [] }, identity, []);
-        this.validateInsights(output, context);
+        const output = await this.generate(context, identity);
         const generatedAt = this.clock();
         const next: Cache = { revision: revision(context), generatedAt, dirty: false, gardens: new Map() };
         for (const garden of output.gardens) {
-          next.gardens.set(garden.gardenId, { fingerprint: gardenFingerprint(context.gardens.find(item => item.garden.id === garden.gardenId)!),
+          const known = context.gardens.find(item => item.garden.id === garden.gardenId)!;
+          // A block that cannot be drawn is left out; it is no reason to lose the whole run.
+          const scope = { now, ids: accountIds(context), plants: new Map(known.histories.map(history => [history.plantId, history.metrics])) };
+          const overviews = garden.overviews.map(overview => ({ ...overview,
+            blocks: publishable(overview.blocks, { ...scope, own: overview.plantId, max: 3 }) }));
+          const blocks = publishable(garden.blocks ?? [], { ...scope, max: 2 });
+          const layout = trail(garden.layout, overviews);
+          next.gardens.set(garden.gardenId, { fingerprint: gardenFingerprint(known),
             insights: { gardenId: garden.gardenId, status: "ready", generatedAt: new Date(generatedAt).toISOString(),
-              overviews: garden.overviews, items: garden.items.map(item => ({ ...item, id: crypto.randomUUID() })) } });
+              overviews, items: garden.items.map(item => ({ ...item, id: crypto.randomUUID() })),
+              ...(blocks.length ? { blocks } : {}), ...(layout ? { layout } : {}) } });
         }
+        await this.backend.writeInsightSnapshot?.(identity, { ...next, version: persisted?.version,
+          gardens: [...next.gardens.values()] });
         this.cache.set(identity.accountId, next);
         this.failures.delete(identity.accountId);
         return { refreshed: true, generatedAt: new Date(generatedAt).toISOString(), gardenIds: [...next.gardens.keys()] };
       } catch (error) {
         const failure = error instanceof ApiError ? error : new ApiError(502, "AGENT_FAILED", "Insight refresh failed. Previous insights were retained.", { cause: error });
         this.failures.set(identity.accountId, { at: this.clock(), error: { code: failure.code, message: failure.message } });
+        await this.backend.recordInsightAttempt?.(identity, this.clock(), { code: failure.code, message: failure.message })
+          .catch(storageError => logFailure(storageError, { scope: "insight-failure-storage", accountId: identity.accountId }));
         throw failure;
       } finally { this.refreshing.delete(identity.accountId); }
     });
   }
 
   decorate(identity: BackendIdentity, insights: InsightsData, dashboard?: DashboardData): InsightsData {
+    // Durable responses already include current invalidation/failure state and
+    // filter deleted plants. Never overlay them with an older process-local cache.
+    if (insights.generation) return { ...insights, generation: { ...insights.generation,
+      ...(this.refreshing.has(identity.accountId) ? { state: "refreshing" as const } : {}) } };
     const cached = this.cache.get(identity.accountId);
     const garden = cached?.gardens.get(insights.gardenId);
     const failure = this.failures.get(identity.accountId);
@@ -304,6 +390,7 @@ export class AgentService {
   async tick() {
     this.cleanup();
     if (!this.runner) return;
+    for (const identity of await this.backend.listAgentAccounts?.() ?? []) this.register(identity);
     for (const { identity } of [...this.identities.values()]) {
       if (this.busy.has(identity.accountId)) continue;
       try { await this.refresh(identity, false); } catch (error) {

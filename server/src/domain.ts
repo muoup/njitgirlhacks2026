@@ -32,11 +32,13 @@ export class DomainService {
   }
 
   async execute(identity: BackendIdentity, action: MutationData, requestId: string, expected?: string) {
+    const replay = await this.backend.replayMutation?.(identity, action, requestId);
+    if (replay) return replay.result;
     const current = await this.inspect(identity, action);
     if (expected !== undefined && current.fingerprint !== expected) {
       throw new ApiError(409, "ACTION_CHANGED", "The target changed. Ask the mentor for a new proposal.");
     }
-    const result = await this.backend.mutate(identity, action, requestId);
+    const result = await this.backend.mutate(identity, action, requestId, expected);
     if ((action.kind === "createGarden" && !Value.Check(GardenResponse, result)) ||
       (action.kind === "createPlant" && !Value.Check(PlantedResponse, result))) {
       throw new ApiError(502, "BACKEND_FAILED", "The backend did not confirm the new resource.");

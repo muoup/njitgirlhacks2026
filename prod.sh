@@ -28,7 +28,7 @@ if [[ $# -gt 1 ]]; then
 fi
 case "${1:-}" in
   "") ;;
-  --demo) export ALLOW_DEMO_IN_PRODUCTION=true ;;
+  --demo) export ALLOW_DEMO_IN_PRODUCTION=true; export DATABASE_URL="" ;;
   -h|--help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac

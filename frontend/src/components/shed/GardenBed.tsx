@@ -23,6 +23,7 @@ export function GardenBed({
   urgencies,
   freshKeys,
   onPlanted,
+  onPlantEdited,
   onPlantRemoved,
   onRemoved,
 }: {
@@ -32,6 +33,7 @@ export function GardenBed({
   /** Keys of the plants planted since the page opened, by plant. */
   freshKeys: Record<string, ApiKey>;
   onPlanted: (plant: Plant, apiKey: ApiKey) => void;
+  onPlantEdited: (plant: Plant) => void;
   onPlantRemoved: (plantId: string) => void;
   onRemoved: () => void;
 }) {
@@ -111,6 +113,7 @@ export function GardenBed({
               plant={item}
               urgency={urgencies.get(item.id) ?? null}
               freshKey={freshKeys[item.id]}
+              onEdited={onPlantEdited}
               onRemoved={() => onPlantRemoved(item.id)}
             />
           ))}

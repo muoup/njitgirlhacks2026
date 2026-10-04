@@ -1,12 +1,16 @@
-import { ApiError, type GroveApi } from "./types";
+import { ApiError, NetworkError, type GroveApi } from "./types";
 
 export function createBffApi(baseUrl: string): GroveApi {
   async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
     // The session is a cookie on the BFF's origin, so every call has to send credentials.
-    const response = await fetch(`${baseUrl}/api/v1${path}`, {
+    const options: RequestInit = {
       method,
       credentials: "include",
       ...(body !== undefined && { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    };
+    const response = await fetch(`${baseUrl}/api/v1${path}`, options).catch(error => {
+      if (error instanceof TypeError) throw new NetworkError(error);
+      throw error;
     });
     if (!response.ok) {
       const failure = await response.json().catch(() => null);
@@ -28,6 +32,7 @@ export function createBffApi(baseUrl: string): GroveApi {
     decideAgentAction: (id, decision) => request(`/chat/actions/${encodeURIComponent(id)}/decision`, "POST", { decision }),
     refreshInsights: () => request("/insights/refresh", "POST", {}),
     listGardens: () => request("/gardens"),
+    listMetrics: () => request("/metrics"),
     getDashboard: gardenId => request(`/dashboard?${new URLSearchParams({ gardenId })}`),
     getPlantReadings: (plantId, from, to) =>
       request(`${plant(plantId)}/readings?${new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })}`),
@@ -35,6 +40,7 @@ export function createBffApi(baseUrl: string): GroveApi {
     createGarden: name => request("/gardens", "POST", { name }),
     removeGarden: gardenId => request(garden(gardenId), "DELETE"),
     createPlant: (gardenId, newPlant) => request(`${garden(gardenId)}/plants`, "POST", newPlant),
+    updatePlant: (plantId, edit) => request(plant(plantId), "PATCH", edit),
     removePlant: plantId => request(plant(plantId), "DELETE"),
     getPlantApiKey: plantId => request(`${plant(plantId)}/api-keys`),
     replacePlantApiKey: plantId => request(`${plant(plantId)}/api-keys`, "POST"),

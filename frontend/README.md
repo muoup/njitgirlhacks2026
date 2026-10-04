@@ -25,9 +25,10 @@ To launch both servers from the repository root with an explicit setting:
 BUN_PUBLIC_API_URL=http://localhost:3001 ./dev.sh
 ```
 
-The BFF seeds `demo@grove.local` / `GroveDemo2026!` in development unless disabled.
-Its auth storage is ephemeral. All sample garden data comes from the BFF's mock
-backend adapter; the frontend has no local sample-data or pretend-login path.
+Without `DATABASE_URL`, the server seeds `demo@grove.local` / `GroveDemo2026!` in
+development unless disabled and uses ephemeral auth/fixtures. With a database,
+accounts, gardens, readings, memory, and insights are durable; new accounts start
+empty. The frontend has no local sample-data or pretend-login path.
 
 The dashboard loads gardens, then the selected garden's data. Plant history is
 fetched separately. Response types are imported from `../server/src/schemas.ts`
@@ -37,10 +38,11 @@ Checks: `bun run typecheck` and `bun run build`. The build requires the same API
 URL setting. OpenAPI docs are served by the BFF at `http://localhost:3001/openapi`.
 
 The mentor page and dock share a real BFF conversation and account memory. Set
-`GEMINI_API_KEY` in `server/.env` and restart the BFF to enable replies. Missing
+`GOOGLE_VERTEX_PROJECT` in `server/.env`, configure Google ADC, and restart the
+server to enable replies. Missing
 configuration is shown as an error; there is no stand-in reply path. Garden/plant
-changes requested in chat appear as approval cards. The backend still returns
-`NOT_IMPLEMENTED` for those changes, even after approval.
+changes requested in chat appear as approval cards. They execute with database
+storage; the mock adapter still returns `NOT_IMPLEMENTED` after approval.
 
 Use **Refresh garden insights** in the conversation to force the BFF's scheduled
 harness immediately. Generated overviews use the dashboard's existing renderer;
@@ -53,8 +55,8 @@ To run for production:
 bun start
 ```
 
-To launch both services on a VM, use `./prod.sh --demo` from the repo root for
-the current scaffold, or `./prod.sh` after durable BFF adapters are configured.
+To launch both services on a VM, use `./prod.sh` after completing
+`server/TIGER_SETUP.md`, or `./prod.sh --demo` for the original fixture scaffold.
 See [deployment instructions](../DEPLOYMENT.md). The frontend's production HTML
 server automatically bundles and caches assets; `dist` is a separate static build.
 

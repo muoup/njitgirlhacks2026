@@ -1,5 +1,6 @@
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { CompactReadings, readingInWords } from "../CompactReadings";
+import { useMetrics } from "../metrics";
 import { URGENCY, urgencyLabel } from "../overview";
 import { type DashboardView, findPlant, latestReading } from "../view";
 
@@ -12,6 +13,7 @@ export function CalmPlants({ plantIds, view }: { plantIds: string[]; view: Dashb
   const overviews = view.overviews.filter(overview => plantIds.includes(overview.plantId));
   const allWell = overviews.every(overview => overview.urgency === "ok");
   const others = plantIds.length < view.dashboard.plants.length;
+  const metrics = useMetrics();
 
   return (
     <section>
@@ -27,7 +29,7 @@ export function CalmPlants({ plantIds, view }: { plantIds: string[]; view: Dashb
             <li key={plant.id}>
               <button
                 type="button"
-                aria-label={`${plant.name}: ${urgencyLabel(overview.urgency).toLowerCase()}, ${readingInWords(reading)}. ${overview.text}`}
+                aria-label={`${plant.name}: ${urgencyLabel(overview.urgency).toLowerCase()}, ${readingInWords(reading, metrics)}. ${overview.text}`}
                 onClick={() => view.selectPlant(plant.id)}
                 className="grid w-full cursor-pointer grid-cols-[auto_1fr] items-center gap-x-3 rounded-md border-0 bg-transparent p-1 text-left font-sans text-foreground outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
@@ -42,7 +44,7 @@ export function CalmPlants({ plantIds, view }: { plantIds: string[]; view: Dashb
                       {urgencyLabel(overview.urgency)}
                     </span>
                   </span>
-                  <CompactReadings reading={reading} className="mt-1 justify-start text-sm text-foreground" />
+                  <CompactReadings reading={reading} className="mt-1 -ml-1 text-left text-sm text-foreground" />
                 </span>
                 {overview.text && <span className="col-span-2 mt-1 text-sm text-muted-foreground">{overview.text}</span>}
               </button>

@@ -59,12 +59,15 @@ function Leaves({ leaves, from }: { leaves: Leaf[]; from: number }) {
  */
 export function Note({
   title,
+  foot,
   light,
   cut = 0,
   className,
   children,
 }: {
   title?: string;
+  /** A quieter line under the words, such as what they rest on. */
+  foot?: ReactNode;
   light?: string;
   /** Which way the slate is cut and which corners the vine takes, so neighbouring notes differ. */
   cut?: number;
@@ -80,6 +83,7 @@ export function Note({
         <div className="note-face px-5 py-4">
           {title && <p className="m-0 mb-1.5 font-tale text-xl leading-tight text-grove-parchment italic">{title}</p>}
           <p className="m-0 leading-relaxed">{children}</p>
+          {foot && <p className="mt-2 mb-0 text-xs text-muted-foreground">{foot}</p>}
         </div>
       </div>
       <div aria-hidden="true" className={cn("pointer-events-none absolute inset-0", cut % 2 === 1 && "-scale-x-100")}>

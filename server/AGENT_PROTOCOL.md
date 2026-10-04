@@ -1,11 +1,13 @@
 # Backend integration handoff
 
-The BFF owns Better Auth, the Gemini harness, context assembly, tool permissions,
-chat approvals, and insight generation. The teammate backend owns garden/plant
-records, readings, firmware credentials, and persistent account memory. All calls
-receive server-derived `BackendIdentity = { version: "v1", userId, accountId }`.
-An agreed service credential must authenticate that identity; browser cookies are
-not the backend protocol. No backend URLs or credentials have been selected.
+The server owns Better Auth, the Gemini harness, context assembly, tool permissions,
+chat approvals, and insight generation. `PostgresBackend` stores garden/plant
+records, readings, firmware credentials, and account memory directly in Tiger
+Cloud/PostgreSQL. All calls receive server-derived
+`BackendIdentity = { version: "v1", userId, accountId }`; accountId equals the
+Better Auth user ID, not the OAuth provider's account ID. No separate backend
+token protocol is needed while the adapter runs inside this server process.
+See [TIGER_SETUP.md](TIGER_SETUP.md) and [FIRMWARE_API.md](FIRMWARE_API.md).
 
 ## MEMORY.md
 
@@ -26,15 +28,13 @@ writeMemory(identity, {
 }): Promise<MemoryDocument>
 ```
 
-Proposed HTTP equivalents, to be agreed: `GET /accounts/:accountId/memory` and
-`PUT /accounts/:accountId/memory`. The backend verifies the authenticated account
-scope on both. A missing document returns empty Markdown, revision 0, and null
+There is no public memory editing endpoint. A missing document returns empty Markdown, revision 0, and null
 updatedAt. Writes atomically compare expectedRevision, increment the revision,
 and return the committed document. Conflicts return `MEMORY_CONFLICT` (409).
 The BFF adapter labels real storage as source `backend`. The Markdown limit is
 16,384 characters. There is no public BFF memory editing endpoint.
 
-Until that service exists, MockBackend reads and stores documents in an account-
+With no database configured, MockBackend reads and stores documents in an account-
 scoped map. It models compare-and-swap but is not durable. Its data is marked
 `mock`. Both chat and scheduled runs may update memory. The memory skill guides
 dated preferences, observations, care history, and open questions; it distinguishes
@@ -42,18 +42,21 @@ user statements from inferences and does not store credentials or approval grant
 
 ## Garden/plant mutations
 
-The adapter reserves `mutate(identity, action, requestId)` for four actions:
+The adapter implements `mutate(identity, action, requestId, expectedFingerprint?)` for four actions:
 
 - `createGarden { name }` returns `{ garden }`.
 - `createPlant { gardenId, name, species }` returns `{ plant, apiKey }`.
 - `removeGarden { gardenId }` returns no body; removes associated records/keys.
 - `removePlant { plantId }` returns no body; removes associated records/keys.
 
-The backend must recheck ownership and atomically deduplicate requestId. Agent
+PostgreSQL rechecks ownership and atomically deduplicates requestId. Agent
 requests use the pending action ID as their idempotency key. The BFF's in-process
 decision replay handling is not a durable exactly-once guarantee. Key issuance and
 revocation happen in the backend; no secret is included in model tool results or
-conversation history. The development adapter always raises 501 NOT_IMPLEMENTED.
+conversation history. Retry-ledger keys are encrypted too. Approval fingerprints
+are rechecked inside the mutation transaction. The development mock adapter
+always raises 501 NOT_IMPLEMENTED. Browser mutation endpoints also accept an
+optional `Idempotency-Key` header (1–120 letters/digits, `_ . : -`).
 
 The BFF authenticates the user, records exact proposed arguments and a target
 snapshot, and executes only after a popup decision from that account. Approvals
@@ -64,17 +67,46 @@ operations and approved agent operations share DomainService and the backend ada
 
 ## Insights and scheduling
 
-The BFF currently caches validated account-wide generations in memory and decorates
-the existing per-garden/dashboard responses. Generated plant overviews contain
-urgency, headline, text, permitted readings/chart blocks, and evidence windows.
+The server caches validated account-wide generations in memory and, with database
+storage, saves them in `grove.agent_accounts`. Generated plant overviews contain
+urgency, headline, text, evidence windows, and up to three blocks from the kit in
+`src/agent/blocks.ts`: `readings`, `chart` (with up to two marked moments),
+`meter`, `stat` and `steps`. A block only chooses what to show; the page takes
+every value from the plant's readings and every scale and healthy range from the
+metric catalogue (`GET /api/v1/metrics`, also in the dashboard response). A garden
+may carry up to two blocks of its own, each naming a plant, and a `layout`: the
+order of its stops. A chat reply may carry up to two blocks, with the names of
+the plants they are about.
 Generation metadata separates ready/stale/refreshing/failed/unavailable states
 from the existing insight status, timestamps, and items. Sensor source stays
 mock/backend independently of whether Gemini generated the prose.
 
-The periodic worker only knows accounts encountered by this process in the last
-24 hours. Future offline scheduling requires an authenticated backend method to
-enumerate eligible account identities and durable job coordination. Persistent
-insight/cache storage can be introduced behind a store adapter once agreed.
+Generated prose is checked before it is published (`src/agent/writing.ts`):
+headlines up to 60 characters, notes up to 280, and no dates, clock times, raw
+counts, metric identifiers, IDs or Markdown. Output that fails this or the
+structural checks is returned to the model once with what was wrong; a second
+failure fails the refresh and keeps the previous insights. Blocks and layouts
+are held to a different rule: the model writes them in a flat, loosely bounded
+shape, and one that cannot be drawn (an unknown plant, a metric the plant has not
+reported, a mark outside the chart, a step that is not plain words) is dropped on
+its own. A layout is published only if every plant has exactly one place and the
+plants that call for someone lead it, each as its own stop; otherwise the page
+orders the stops itself, as it does when plants have changed since. Readings reach the
+model already calibrated, with the metric catalogue from `src/metrics.ts`.
+A scheduled run is given every skill in its instructions and has five steps;
+chat loads skills on demand and has eight. The last step of either cannot call
+a tool, so a run always ends with an answer. Chat thinks at Gemini's medium
+level; a scheduled run at low, where it writes the same insights in a quarter
+of the time instead of thinking through its output allowance.
+
+With PostgreSQL, the worker rediscovers accounts active in the last 24 hours from
+the database. Browser requests and device ingestion record activity. Uploads,
+resource changes, and memory updates mark insights dirty; successful refreshes
+save context revision, output, and freshness state. A data version prevents a
+refresh from marking newer ingested data as fresh. Failures preserve the last
+successful output and are retried after restart. Mock scheduling remains in memory.
+Run one server process: multi-instance worker coordination and persistent approvals
+are not implemented. Conversations and pending approvals expire in memory.
 `POST /api/v1/insights/refresh` is already the authenticated manual entry point:
 it forces all account gardens through the same scheduled harness and waits for
 completion. It cannot grant mutation permissions.

@@ -1,13 +1,25 @@
 import { Radio } from "lucide-react";
 
-import { timeAgo } from "@/lib/format";
-import { Note } from "../Note";
-import type { DashboardView } from "../view";
+import type { CSSProperties } from "react";
 
-/** What was written about the garden as a whole, and when its monitors were last heard from. */
+import { timeAgo } from "@/lib/format";
+import { BlockView, isWide } from "../Blocks";
+import { Note } from "../Note";
+import { URGENCY } from "../overview";
+import { Plaque } from "../Panel";
+import { type DashboardView, findPlant, latestReading } from "../view";
+
+/**
+ * What was written about the garden as a whole, and when its monitors were last heard from.
+ * Whatever the notes point at is drawn on a plaque under them, each piece named for its plant.
+ */
 export function GardenNotes({ view }: { view: DashboardView }) {
   const { insights, devices } = view.dashboard;
   const notes = insights.items.filter(item => item.plantId === null);
+  const blocks = (insights.blocks ?? [])
+    .map(block => ({ block, plant: "plantId" in block && block.plantId ? findPlant(view.dashboard, block.plantId) : undefined }))
+    // Only steps make sense without a plant to be about.
+    .filter(item => item.plant || item.block.type === "steps");
 
   const monitors = devices.length > 0 && (
     <ul className="m-0 mt-4 grid list-none gap-1 p-0 text-sm text-muted-foreground">
@@ -24,28 +36,44 @@ export function GardenNotes({ view }: { view: DashboardView }) {
   );
 
   return (
-    <section className="flex flex-wrap items-start gap-x-10 gap-y-5">
-      <div>
-        <h2 className="m-0 font-brush text-4xl leading-none font-normal text-grove-parchment">From the grove</h2>
-        <p className="mt-1.5 mb-0 text-sm text-muted-foreground">
-          {insights.status === "unavailable"
-            ? "Insights aren’t available for this garden right now."
-            : insights.generatedAt
-              ? `Notes written ${timeAgo(insights.generatedAt)}.`
-              : "No notes have been written yet."}
-        </p>
-        {monitors}
+    <section>
+      <div className="flex flex-wrap items-start gap-x-10 gap-y-5">
+        <div>
+          <h2 className="m-0 font-brush text-4xl leading-none font-normal text-grove-parchment">From the grove</h2>
+          <p className="mt-1.5 mb-0 text-sm text-muted-foreground">
+            {insights.status === "unavailable"
+              ? "Insights aren’t available for this garden right now."
+              : insights.generatedAt
+                ? `Notes written ${timeAgo(insights.generatedAt)}.`
+                : "No notes have been written yet."}
+          </p>
+          {monitors}
+        </div>
+        {notes.length > 0 && (
+          <ul className="m-0 flex min-w-[min(100%,16rem)] flex-1 list-none flex-wrap items-start gap-5 p-0">
+            {notes.map((note, index) => (
+              <li key={note.id} className="max-w-sm">
+                <Note title="Of the whole garden" cut={index + 1}>
+                  {note.text}
+                </Note>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      {notes.length > 0 && (
-        <ul className="m-0 flex min-w-[min(100%,16rem)] flex-1 list-none flex-wrap items-start gap-5 p-0">
-          {notes.map((note, index) => (
-            <li key={note.id} className="max-w-sm">
-              <Note title="Of the whole garden" cut={index + 1}>
-                {note.text}
-              </Note>
-            </li>
-          ))}
-        </ul>
+      {blocks.length > 0 && (
+        <Plaque cut={2} className="mt-8">
+          <div className={blocks.some(item => isWide(item.block)) ? "grid gap-x-8 gap-y-6 md:grid-cols-2" : "flex flex-wrap gap-x-10 gap-y-6"}>
+            {blocks.map(({ block, plant }, index) => {
+              const urgency = view.overviews.find(overview => overview.plantId === plant?.id)?.urgency;
+              return (
+                <div key={index} className="min-w-0" style={{ "--chart-1": urgency ? URGENCY[urgency].color : undefined } as CSSProperties}>
+                  <BlockView block={block} plantId={plant?.id ?? ""} reading={plant && latestReading(view.dashboard, plant.id)} subject={plant?.name} />
+                </div>
+              );
+            })}
+          </div>
+        </Plaque>
       )}
     </section>
   );
