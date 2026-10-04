@@ -4,6 +4,7 @@
 #include "../lib/Grove_I2C_Color_Sensor_TCS3472/Adafruit_TCS34725.h"
 #include <WiFi.h>
 #include "arduino_secrets.h"
+#include <ArduinoBLE.h>
 
 /**
  * Parameters for soil sensor
@@ -102,6 +103,18 @@ void printCurrentNet() {
     Serial.println();
 }
 
+void onBLEConnect(BLEDevice device) {
+    BLE.setConnectable(false);
+    BLE.stopAdvertise();
+    Serial.println("Connected to " + device.deviceName());
+}
+
+void onBLEDisconnect(BLEDevice device) {
+    BLE.setConnectable(true);
+    BLE.advertise();
+    Serial.println("Disconnected from" + device.deviceName());
+}
+
 bool aqsStatus = false;
 bool barometerStatus = false;
 bool tcsStatus = false;
@@ -110,6 +123,21 @@ int wlStatus = WL_IDLE_STATUS;
 void setup() {
     Serial.begin(9600);
     // write your initialization code here
+
+    // Bluetooth setup begin
+    if (!BLE.begin()) {
+        Serial.println("Bluetooth is epxlode");
+    }
+
+    // this uuid is a placeholder is tole from docs please replace with generator please
+    BLE.setAdvertisedServiceUuid("19B10000-E8F2-537E-4F6C-D104768A1214");
+
+    BLE.setEventHandler(BLEConnected, onBLEConnect);
+    BLE.setEventHandler(BLEDisconnected, onBLEDisconnect);
+
+    BLE.setConnectable(true);
+    BLE.advertise();
+    // Bluetooth setup end
 
     // Setup LED outputs
     pinMode(GREEN_LED, OUTPUT);
