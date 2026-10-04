@@ -4,6 +4,7 @@
 #include "../lib/Grove_I2C_Color_Sensor_TCS3472/Adafruit_TCS34725.h"
 #include <WiFi.h>
 #include "arduino_secrets.h"
+#include "NTPClient.h"
 
 /**
  * Parameters for soil sensor
@@ -49,8 +50,11 @@ Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS3472
 /**
  * Parameters for wireless module
  */
-IPAddress serverIP(10,196,226,157);
+IPAddress serverIP(20,121,136,26);\
+int port = 3001;
 WiFiSSLClient client;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
 
 void printMacAddress(byte mac[]) {
     for (int i = 0; i < 6; i++) {
@@ -176,6 +180,10 @@ void setup() {
     printCurrentNet();
     printWifiData();
 
+    // Update RTC
+    timeClient.begin();
+    timeClient.update();
+
     // Connect to webserver
     Serial.print("\nStarting connection to server ");
     Serial.println(serverIP);
@@ -183,16 +191,6 @@ void setup() {
 
     if (client.connect(serverIP, 4500)) {
         Serial.println("connected to server");
-        // Make a HTTP request:
-        std::string requestBody = "{\n\"sampleId\": \"" + + "\",\n\"price\": 69,\n\"qty\": 1}";
-        client.println("POST /api/v1/ingest/readings HTTP/1.1");
-        client.print("Host: ");
-        client.println(serverIP);
-        client.println("Connection: keep-alive");
-        client.println("Content-type: application/json");
-        client.println("Content-length: ");
-        client.println();
-        client.println(requestBody);
     }
 }
 
@@ -205,17 +203,17 @@ void loop() {
         /**
          * Poll soil sensor
          */
-        int sensorValue = analogRead(SOIL_SENSOR_PIN);
+        int soilRawValue = analogRead(SOIL_SENSOR_PIN);
         // Print the sensor reading values
         Serial.print("Soil moisture sensor value: ");
-        Serial.println(sensorValue);
+        Serial.println(soilRawValue);
 
-        if(sensorValue > 0 && sensorValue <= WET_THRESHOLD) {
+        if(soilRawValue > 0 && soilRawValue <= WET_THRESHOLD) {
             // Extremely wet (green LED)
             digitalWrite(GREEN_LED, HIGH);
             digitalWrite(YELLOW_LED, LOW);
             digitalWrite(RED_LED, LOW);
-        } else if (sensorValue > WET_THRESHOLD && sensorValue <= DRY_THRESHOLD) {
+        } else if (soilRawValue > WET_THRESHOLD && soilRawValue <= DRY_THRESHOLD) {
             // Wet (yellow LED)
             digitalWrite(GREEN_LED, LOW);
             digitalWrite(YELLOW_LED, HIGH);
@@ -248,12 +246,15 @@ void loop() {
         Serial.println(lightLevel);
 
         // Poll barometer
+        double pres = 0.0;
+        double temp = 0.0;
+        double altitude = 0.0;
         // Wait for available reading
         if (spl.pressureAvailable() || spl.temperatureAvailable()) {
             // Read latest values
-            double pres = spl.readPressure();
-            double temp = spl.readTemperature();
-            double altitude = spl.calcAltitude();
+            pres = spl.readPressure();
+            temp = spl.readTemperature();
+            altitude = spl.calcAltitude();
             // Print to serial
             Serial.print("Pres: ");
             Serial.print(pres, 3);
@@ -262,29 +263,60 @@ void loop() {
             Serial.print(" C, Altitude: ");
             Serial.print(altitude, 3);
             Serial.println(" m");
-
-            // Poll colour sensor
-            uint16_t clear, red, green, blue;
-            tcs.setInterrupt(false);      // turn on LED
-            delay(60);  // takes 50ms to read
-            tcs.getRawData(&red, &green, &blue, &clear);
-            tcs.setInterrupt(true);  // turn off LED
-            Serial.print("C:\t"); Serial.print(clear);
-            Serial.print("\tR:\t"); Serial.print(red);
-            Serial.print("\tG:\t"); Serial.print(green);
-            Serial.print("\tB:\t"); Serial.print(blue);
-
-            // Convert RGB values to hex
-            uint32_t sum = clear;
-            float r, g, b;
-            r = red; r /= sum;
-            g = green; g /= sum;
-            b = blue; b /= sum;
-            r *= 256; g *= 256; b *= 256;
-            Serial.print("\t");
-            Serial.print((int)r, HEX); Serial.print((int)g, HEX); Serial.print((int)b, HEX);
-            Serial.println();
         }//if
+
+        // Poll colour sensor
+        uint16_t clear, red, green, blue;
+        tcs.setInterrupt(false);      // turn on LED
+        delay(60);  // takes 50ms to read
+        tcs.getRawData(&red, &green, &blue, &clear);
+        tcs.setInterrupt(true);  // turn off LED
+        Serial.print("C:\t"); Serial.print(clear);
+        Serial.print("\tR:\t"); Serial.print(red);
+        Serial.print("\tG:\t"); Serial.print(green);
+        Serial.print("\tB:\t"); Serial.print(blue);
+
+        // Convert RGB values to hex
+        uint32_t sum = clear;
+        float r, g, b;
+        r = red; r /= sum;
+        g = green; g /= sum;
+        b = blue; b /= sum;
+        r *= 256; g *= 256; b *= 256;
+        Serial.print("\t");
+        Serial.print((int)r, HEX); Serial.print((int)g, HEX); Serial.print((int)b, HEX);
+        Serial.println();
+
+        // Make a HTTP request
+        String requestBody = "{\n\"sampleId\": \""
+        + String(BEARER_TOKEN).substring(48, 56)
+        + String(timeClient.getDay())
+        + String(timeClient.getHours())
+        + String(timeClient.getMinutes())
+        + String(timeClient.getSeconds())
+        + R"(","measurements": [{"metric":"soil_moisture_raw","unit":"ADC","value":)" +
+            String(soilRawValue) + R"(},{"metric":"light_level_raw","unit":"ADC","value":)" +
+                String(lightLevel) + R"(},{"metric":"temperature","unit":"°C","value":)" +
+                    String(temp) + R"(},{"metric":"air_quality_raw","unit":"raw","value":)" +
+                        String(aqs.getValue()) + R"(},{"metric":"pressure","unit":"Pa","value":)" +
+                            String(pres) + R"(},{"metric":"altitude","unit":"m","value":)" +
+                                String(altitude) + R"(}],"color":"#)" +
+                                    String(static_cast<int>(r), HEX) +
+                                        String(static_cast<int>(g), HEX) +
+                                            String(static_cast<int>(b), HEX) + R"("})";
+        Serial.println(requestBody);
+        client.println("POST /api/v1/ingest/readings HTTP/1.1");
+        client.print("Authorization: ");
+        client.println(BEARER_TOKEN);
+        client.print("Host: ");
+        client.println(serverIP);
+        client.println("Connection: keep-alive");
+        client.println("Content-type: application/json");
+        client.print("Content-length: ");
+        client.println(requestBody.length());
+        client.println();
+        client.println(requestBody);
+
         intervalTimer = millis();
     }
 }
