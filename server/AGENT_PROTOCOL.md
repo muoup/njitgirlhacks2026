@@ -80,5 +80,8 @@ it forces all account gardens through the same scheduled harness and waits for
 completion. It cannot grant mutation permissions.
 
 Model tests inject AgentRunner; app construction and OpenAPI generation have no
-scheduled or paid-model side effects. A live provider key is needed to exercise
-Gemini. Server configuration fixes gemini-3.8-flash with medium thinking.
+scheduled or paid-model side effects. A Cloud project with Vertex AI access and
+Google Application Default Credentials is needed to exercise Gemini. The harness
+uses the project-scoped Vertex AI provider, not the AI Studio Developer API.
+Server configuration fixes gemini-3.8-flash with medium thinking. Setup and a
+manual access check are documented in [VERTEX_SETUP.md](VERTEX_SETUP.md).

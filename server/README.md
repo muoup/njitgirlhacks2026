@@ -93,11 +93,37 @@ native error format, which is included in the merged OpenAPI document.
 
 ## Garden mentor
 
-Set `GEMINI_API_KEY` in `server/.env` and restart the BFF. The model is fixed in
-code to `gemini-3.8-flash`, with `thinkingLevel: "medium"`, through Vercel's AI SDK
-and Google provider. The frontend uses real BFF chat calls; missing configuration
-returns 503 `AGENT_NOT_CONFIGURED`. It does not fabricate replies. Existing domain
-and auth routes remain usable without a key.
+Set `GOOGLE_VERTEX_PROJECT` in `server/.env` to the Cloud project ID linked to
+your intended billing account. `GOOGLE_VERTEX_LOCATION` defaults to `global`.
+Configure Google Application Default Credentials (ADC), then restart the BFF.
+The model is fixed to `gemini-3.8-flash`, with `thinkingLevel: "medium"`, through
+Vercel's AI SDK Vertex provider. Requests target `aiplatform.googleapis.com` with
+OAuth credentials and a project-scoped path. There is no Developer API fallback;
+`GEMINI_API_KEY` and express-mode `GOOGLE_VERTEX_API_KEY` are not used. Missing
+project configuration returns 503 `AGENT_NOT_CONFIGURED`. Auth and domain routes
+remain usable without agent configuration.
+
+See [VERTEX_SETUP.md](VERTEX_SETUP.md) for Google Cloud console, local login, and
+trial-credit checks. Google Cloud now labels Vertex AI as Gemini Enterprise Agent
+Platform in its console/documentation; the API service remains
+`aiplatform.googleapis.com`. New $300 welcome credits exclude AI Studio's Gemini
+Developer API. Selecting Vertex does not verify your billing account or credit
+eligibility; confirm the project/account link and credit application in Cloud Billing.
+
+After setup, run `cd server` then `bun run agent:check`. This makes one small
+billable model request without garden data or tools, prints token usage on success,
+and returns a nonzero exit code plus safe diagnostics on failure. It never runs
+automatically on startup, during tests, or while generating OpenAPI.
+
+Provider failures print `BFF failure` diagnostics to the server terminal/stderr,
+including HTTP status, Google status/reason codes, and the SDK cause stack frames.
+Cron uses the same diagnostics. Request bodies, raw response bodies, exception
+messages, chat content, and memory are excluded from logs; URL queries and known
+keys are redacted. Browser errors remain generic. The startup `Garden mentor`
+line reports the selected project/location; credentials and Cloud permissions are
+checked on the first model request, not startup. Missing ADC, disabled APIs, and
+IAM failures have specific setup hints. Put project settings in `server/.env` or
+the launch environment; the root `.env` is not loaded by `dev.sh`.
 
 Chat and scheduled runs share account-wide context: all gardens, plant records,
 latest readings, deterministic summaries of seven days of history, and MEMORY.md.
@@ -129,7 +155,7 @@ refreshes data after a successful change. While mutations are stubbed, an approv
 action returns HTTP 200 with `action.status: "failed"` and result code
 `NOT_IMPLEMENTED`; HTTP success here means the decision was processed.
 
-The listening entry point starts a worker every 30 minutes when a key is present.
+The listening entry point starts a worker every 30 minutes when a project is configured.
 It processes accounts seen in authenticated requests during the last 24 hours.
 It rebuilds context and generates only when inputs change, the last result is at
 least an hour old, or the previous refresh failed. Fetch time alone does not count

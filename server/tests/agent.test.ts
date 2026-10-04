@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { MockBackend, type BackendIdentity } from "../src/backend";
 import { AgentService } from "../src/agent/service";
 import { GeminiRunner, type AgentRunner, type RunInput } from "../src/agent/runner";
+import { testVertexAuth } from "./vertex-auth";
 import type { InsightOutputData, MutationData } from "../src/agent/schemas";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
@@ -167,17 +168,46 @@ describe("garden agent harness", () => {
   test("real SDK serialization fixes the model and medium thinking without network access", async () => {
     let requestBody: any;
     let requestURL = "";
+    let requestHeaders!: Headers;
     const fetch: typeof globalThis.fetch = (async (url: any, options: any) => {
       requestURL = String(url);
+      requestHeaders = new Headers(options.headers);
       requestBody = JSON.parse(options.body);
+      // Reproduce Vertex's rejection of a root anyOf without type: object.
+      const declarations = requestBody.tools?.flatMap((entry: any) => entry.functionDeclarations ?? []) ?? [];
+      if (declarations.some((entry: any) => entry.parametersJsonSchema.type !== "object")) {
+        return Response.json({ error: { code: 400, status: "INVALID_ARGUMENT", message: "Request contains an invalid argument." } }, { status: 400 });
+      }
       return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify({ reply: "Hello from the mentor." }) }] }, finishReason: "STOP" }],
         usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 10, totalTokenCount: 11 } });
     }) as typeof globalThis.fetch;
-    const agents = new AgentService(new MockBackend(() => initialTime), new GeminiRunner("test-key", fetch), () => initialTime);
-    expect((await agents.chat(alice, { persona: "gnome", message: "Hello", requestId: "sdk" })).reply).toBe("Hello from the mentor.");
-    expect(requestURL).toContain("gemini-3.8-flash");
+    const agents = new AgentService(new MockBackend(() => initialTime), new GeminiRunner({ project: "test-project", location: "global" }, { fetch, googleAuthOptions: testVertexAuth }), () => initialTime);
+    const previousKey = process.env.GOOGLE_VERTEX_API_KEY;
+    try {
+      // A stale environment key must not silently select express-mode billing.
+      process.env.GOOGLE_VERTEX_API_KEY = "ignored-express-key";
+      expect((await agents.chat(alice, { persona: "gnome", message: "Hello", requestId: "sdk" })).reply).toBe("Hello from the mentor.");
+    } finally {
+      if (previousKey === undefined) delete process.env.GOOGLE_VERTEX_API_KEY;
+      else process.env.GOOGLE_VERTEX_API_KEY = previousKey;
+    }
+    expect(requestURL).toBe("https://aiplatform.googleapis.com/v1beta1/projects/test-project/locations/global/publishers/google/models/gemini-3.8-flash:generateContent");
+    expect(requestHeaders.get("authorization")).toBe("Bearer test-access-token");
+    expect(requestHeaders.has("x-goog-api-key")).toBe(false);
+    const action = requestBody.tools.flatMap((entry: any) => entry.functionDeclarations ?? [])
+      .find((entry: any) => entry.name === "proposeAction");
+    expect(action.parametersJsonSchema.type).toBe("object");
+    expect(action.parametersJsonSchema.anyOf).toHaveLength(4);
     expect(requestBody.generationConfig.thinkingConfig.thinkingLevel).toBe("medium");
     expect(requestBody.generationConfig.responseMimeType).toBe("application/json");
+  });
+
+  test("a legacy Gemini key does not enable the agent; a Cloud project needs no credentials at app construction", async () => {
+    const legacy = await createApp({ config: loadConfig({ GEMINI_API_KEY: "ignored-developer-key", SEED_DEMO_ACCOUNT: "false" }) });
+    expect(legacy.agents.configured).toBe(false);
+    const cloud = await createApp({ config: loadConfig({ GOOGLE_VERTEX_PROJECT: "test-project", SEED_DEMO_ACCOUNT: "false" }) });
+    expect(cloud.agents.configured).toBe(true);
+    expect((await cloud.app.handle(new Request("http://localhost:3001/health"))).status).toBe(200);
   });
 
   test("timeouts retain insights and prevent a late tool from updating memory", async () => {

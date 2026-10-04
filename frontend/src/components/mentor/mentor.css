@@ -49,13 +49,13 @@
     visibility 0s;
 }
 
-/* While the sidebar is away, the mentor leans in from the same edge. */
+/* While the sidebar is away, the mentor waits in the corner it slides out of. */
 .mentor-peek {
   transition: translate 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s;
 }
 
 .mentor-peek[data-away="true"] {
-  translate: 110% 0;
+  translate: calc(100% + 2rem) 0;
   visibility: hidden;
   transition:
     translate 0.25s ease-in,
@@ -64,7 +64,7 @@
 
 .mentor-peek-figure {
   transform-origin: 50% 100%;
-  rotate: -26deg;
+  rotate: -4deg;
   transition:
     rotate 0.35s cubic-bezier(0.3, 1.5, 0.6, 1),
     translate 0.35s cubic-bezier(0.3, 1.5, 0.6, 1);
@@ -72,6 +72,6 @@
 
 .mentor-peek:hover .mentor-peek-figure,
 .mentor-peek:focus-visible .mentor-peek-figure {
-  rotate: -34deg;
-  translate: -0.6rem 0;
+  rotate: -9deg;
+  translate: 0 -0.3rem;
 }

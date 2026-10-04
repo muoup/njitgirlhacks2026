@@ -74,7 +74,7 @@ export function About() {
       <GroveSymbols />
       <header className="mx-auto flex max-w-[70rem] items-center justify-between px-5 py-5 sm:px-8">
         <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
-          loam
+          loam gnome
         </Link>
         <Button asChild className="font-bold">
           <Link to="/signin">Get started</Link>
@@ -94,7 +94,7 @@ export function About() {
                 How the mushrooms know
               </h1>
               <p className="mx-auto mt-6 mb-0 max-w-[36rem] text-lg leading-relaxed text-muted-foreground">
-                loam is a soil monitor for garden beds. Every plant you grow gets a monitor in its soil and a mushroom in the grove. The
+                loam gnome is a soil monitor for garden beds. Every plant you grow gets a monitor in its soil and a mushroom in the grove. The
                 mushroom shows how the plant is doing, so one look tells you which plant needs you.
               </p>
             </div>

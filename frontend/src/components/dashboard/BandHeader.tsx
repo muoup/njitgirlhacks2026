@@ -23,6 +23,18 @@ const BOARD_TILT = { "--tilt": "-2.2deg", "--nudge": "0px" } as CSSProperties;
 const BOARD_CUT = "polygon(0 5%, 99% 0, 100% 93%, 1% 100%)";
 
 /**
+ * The site's name in the top left corner of a signed-in page. Between a phone and a wide
+ * window it takes two lines, which leaves the row to the boards hanging beside it.
+ */
+export function Wordmark({ to }: { to: string }) {
+  return (
+    <Link to={to} className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
+      loam <span className="sm:max-lg:block">gnome</span>
+    </Link>
+  );
+}
+
+/**
  * A board hanging on two ropes from the top centre of the grove. `beside` is a small board
  * hung to its right, `opposite` one hung to its left, and `children` is the line under it.
  */
@@ -39,7 +51,7 @@ function Hanging({
 }) {
   return (
     // On a phone the board hangs lower, under the wordmark and the name tag, so it can use the full width.
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center px-4 sm:px-44">
+    <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center px-4 sm:px-44 lg:px-72">
       {/* Kept narrower than the row on a phone, which leaves room for a small board on either side. */}
       <div
         className={cn(
@@ -143,7 +155,7 @@ export function TitleSign({
 
 /**
  * A small board on its own rope beside the sign, leading to another page. Only the icon
- * shows on narrow screens; `label` is always its name, and `short` is the word painted on it.
+ * shows until the window is wide; `label` is always its name, and `short` is the word painted on it.
  * `tilt` is how it hangs: a board on the sign's left leans the other way.
  */
 export function SideBoard({
@@ -172,7 +184,7 @@ export function SideBoard({
       <span aria-hidden="true" className="absolute bottom-full left-1/2 -z-10 h-40 w-0.5 bg-[#8a7355]" />
       <Plank cut="polygon(0 0, 97% 6%, 100% 100%, 3% 92%)" />
       {children}
-      <span className="hidden md:inline">{short}</span>
+      <span className="hidden lg:inline">{short}</span>
     </Link>
   );
 }

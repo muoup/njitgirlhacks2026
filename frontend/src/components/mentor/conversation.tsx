@@ -14,7 +14,12 @@ interface MentorChat {
   /** Whether a reply is on its way. */
   busy: boolean;
   error: string | null;
+  /** Whether anything has been asked, so there is something to lose by starting again. */
+  started: boolean;
+  /** Changes who answers. The newcomer starts a conversation of their own. */
   change: (persona: Persona) => void;
+  /** Starts again with the same mentor, who remembers nothing of what was said. */
+  clear: () => void;
   ask: (question: string) => void;
   decide: (id: string, decision: "approve" | "cancel") => void;
   refresh: () => void;
@@ -51,13 +56,8 @@ export function MentorProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!who) return;
     return () => {
-      conversation.current += 1;
-      serverConversation.current = undefined;
-      sending.current = false;
-      setBusy(false);
-      setError(null);
       setPersona("gnome");
-      setThread(fresh("gnome"));
+      startAgain("gnome");
       setDraft("");
       setOpen(false);
     };
@@ -73,14 +73,18 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  function startAgain(withPersona: Persona) {
+    conversation.current += 1;
+    serverConversation.current = undefined;
+    sending.current = false;
+    setBusy(false);
+    setError(null);
+    setThread(fresh(withPersona));
+  }
+
   function change(next: Persona) {
     setPersona(next);
-    // The newcomer says hello. If the one leaving had only just said theirs, it goes with them.
-    setThread(current => {
-      const last = current.at(-1);
-      const greeted = last && last.from !== "you" && last.text === MENTORS[last.from].greeting;
-      return [...(greeted ? current.slice(0, -1) : current), { from: next, text: MENTORS[next].greeting }];
-    });
+    startAgain(next);
   }
 
   function ask(question: string) {
@@ -138,7 +142,13 @@ export function MentorProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Context value={{ persona, thread, draft, setDraft, busy, error, change, ask, decide, refresh, open, setOpen }}>
+    <Context
+      value={{
+        persona, thread, draft, setDraft, busy, error, change, ask, decide, refresh, open, setOpen,
+        started: thread.some(message => message.from === "you"),
+        clear: () => startAgain(persona),
+      }}
+    >
       {children}
     </Context>
   );

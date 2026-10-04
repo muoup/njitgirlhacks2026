@@ -4,6 +4,7 @@ import type { BackendAdapter, BackendIdentity } from "../backend";
 import type { DashboardData, InsightsData } from "../schemas";
 import { DomainService } from "../domain";
 import { ApiError } from "../errors";
+import { logFailure } from "../diagnostics";
 import { buildContext, revision, type AccountContext } from "./context";
 import { readSkill, skillNames } from "./skills";
 import type { AgentRunner, AgentTool, RunInput } from "./runner";
@@ -77,7 +78,7 @@ export class AgentService {
 
   private async run(input: Omit<RunInput, "signal" | "tools">, identity: BackendIdentity,
     proposed: ActionRecord[], conversationId?: string) {
-    if (!this.runner) throw new ApiError(503, "AGENT_NOT_CONFIGURED", "Set GEMINI_API_KEY on the BFF to enable the mentor.");
+    if (!this.runner) throw new ApiError(503, "AGENT_NOT_CONFIGURED", "Set GOOGLE_VERTEX_PROJECT and configure Google Application Default Credentials on the BFF to enable the mentor.");
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let calls = 0;
@@ -153,7 +154,7 @@ export class AgentService {
       ]);
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      throw new ApiError(502, "AGENT_FAILED", "The mentor could not complete this run. Try again.");
+      throw new ApiError(502, "AGENT_FAILED", "The mentor could not complete this run. Try again.", { cause: error });
     } finally {
       clearTimeout(timer!);
       controller.abort(); // Prevent tools from a failed/finished run continuing later.
@@ -258,7 +259,7 @@ export class AgentService {
       this.attempts.set(identity.accountId, now);
       this.refreshing.add(identity.accountId);
       try {
-        if (!this.runner) throw new ApiError(503, "AGENT_NOT_CONFIGURED", "Set GEMINI_API_KEY on the BFF to enable insights.");
+        if (!this.runner) throw new ApiError(503, "AGENT_NOT_CONFIGURED", "Set GOOGLE_VERTEX_PROJECT and configure Google Application Default Credentials on the BFF to enable insights.");
         const context = await buildContext(this.backend, identity, now);
         const inputRevision = revision(context);
         const previous = this.cache.get(identity.accountId);
@@ -279,7 +280,7 @@ export class AgentService {
         this.failures.delete(identity.accountId);
         return { refreshed: true, generatedAt: new Date(generatedAt).toISOString(), gardenIds: [...next.gardens.keys()] };
       } catch (error) {
-        const failure = error instanceof ApiError ? error : new ApiError(502, "AGENT_FAILED", "Insight refresh failed. Previous insights were retained.");
+        const failure = error instanceof ApiError ? error : new ApiError(502, "AGENT_FAILED", "Insight refresh failed. Previous insights were retained.", { cause: error });
         this.failures.set(identity.accountId, { at: this.clock(), error: { code: failure.code, message: failure.message } });
         throw failure;
       } finally { this.refreshing.delete(identity.accountId); }
@@ -306,8 +307,7 @@ export class AgentService {
     for (const { identity } of [...this.identities.values()]) {
       if (this.busy.has(identity.accountId)) continue;
       try { await this.refresh(identity, false); } catch (error) {
-        console.error("Scheduled insight refresh failed", { accountId: identity.accountId,
-          code: error instanceof ApiError ? error.code : "AGENT_FAILED" });
+        logFailure(error, { scope: "scheduled-insights", accountId: identity.accountId });
       }
     }
   }

@@ -20,4 +20,4 @@ runtime.groveAgentCleanup = () => {
 console.log(`Grove BFF: ${config.baseURL}`);
 console.log(`OpenAPI: ${config.baseURL}/openapi`);
 console.log("Development auth is in memory; dashboard responses are fixtures.");
-console.log(`Garden mentor: ${agents.configured ? "Gemini 3.8 Flash / medium" : "disabled (set GEMINI_API_KEY)"}`);
+console.log(`Garden mentor: ${agents.configured ? `Vertex AI / Gemini 3.8 Flash / medium (project: ${config.agent.project}, location: ${config.agent.location}; credentials checked on first request)` : "disabled (set GOOGLE_VERTEX_PROJECT and configure Google Application Default Credentials)"}`);

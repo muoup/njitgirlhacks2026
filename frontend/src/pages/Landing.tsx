@@ -26,7 +26,7 @@ export function Landing() {
     >
       <header className="absolute inset-x-0 top-0 z-20 px-[clamp(20px,6vw,96px)] py-5">
         <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
-          loam
+          loam gnome
         </Link>
       </header>
 

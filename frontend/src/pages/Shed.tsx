@@ -1,8 +1,8 @@
 import { ArrowLeft, MessageCircle, Plus } from "lucide-react";
 import { type CSSProperties, useMemo, useState } from "react";
-import { Link, Navigate } from "react-router";
+import { Navigate } from "react-router";
 
-import { AccountTag, FOCUS, Plank, SideBoard, TitleSign } from "@/components/dashboard/BandHeader";
+import { AccountTag, FOCUS, Plank, SideBoard, TitleSign, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveStrip } from "@/components/dashboard/GroveBand";
 import { standInOverviews } from "@/components/dashboard/overview";
 import { Skeleton, StateMessage } from "@/components/dashboard/Panel";
@@ -87,9 +87,7 @@ function SignedIn({ user }: { user: SessionUser }) {
     <div className="shed-soil flex min-h-svh flex-col overflow-x-clip bg-background text-foreground">
       <div className="relative">
         <GroveStrip turf className="h-[250px] [--floor:44px] sm:h-[214px] sm:[--floor:44px]" />
-        <Link to="/dashboard" className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
-          loam
-        </Link>
+        <Wordmark to="/dashboard" />
         <TitleSign
           title="Potting shed"
           opposite={

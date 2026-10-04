@@ -11,6 +11,7 @@ import { ApiError } from "./errors";
 import { DomainService } from "./domain";
 import { AgentService } from "./agent/service";
 import { GeminiRunner, type AgentRunner } from "./agent/runner";
+import { logFailure } from "./diagnostics";
 
 const errorResponses = {
   400: s.ErrorResponse,
@@ -37,7 +38,7 @@ export async function createApp(options: {
   const config = options.config ?? loadConfig();
   const backend = options.backend ?? new MockBackend();
   const agents = new AgentService(backend, options.agentRunner ??
-    (config.agent.apiKey ? new GeminiRunner(config.agent.apiKey) : undefined));
+    (config.agent.project ? new GeminiRunner({ project: config.agent.project, location: config.agent.location }) : undefined));
   const domain = new DomainService(backend);
   function checkOrigin(request: Request) {
     const origin = request.headers.get("Origin");
@@ -96,8 +97,11 @@ export async function createApp(options: {
       methods: ["GET", "POST", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type"],
     }))
-    .onError(({ code, error, set }) => {
+    .onError(({ code, error, set, request }) => {
       if (error instanceof ApiError) {
+        if (error.status >= 500 && error.status !== 501) {
+          logFailure(error, { scope: "http", path: new URL(request.url).pathname });
+        }
         set.status = error.status;
         return { error: { code: error.code, message: error.message } };
       }
@@ -110,7 +114,7 @@ export async function createApp(options: {
         return { error: { code: "NOT_FOUND", message: "Endpoint not found." } };
       }
       set.status = 500;
-      console.error("BFF request failed", error);
+      logFailure(error, { scope: "http", path: new URL(request.url).pathname });
       return { error: { code: "INTERNAL_ERROR", message: "The request could not be completed." } };
     })
     .onAfterHandle(({ request, response }) => {

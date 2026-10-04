@@ -1,8 +1,8 @@
 import { MessageCircle, Shovel } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 
-import { AccountTag, GardenSign, SideBoard } from "@/components/dashboard/BandHeader";
+import { AccountTag, GardenSign, SideBoard, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
 import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
@@ -189,9 +189,7 @@ function SignedIn({ user }: { user: SessionUser }) {
           selectedId={plantId}
           onSelect={selectPlant}
         />
-        <Link to="/" className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
-          loam
-        </Link>
+        <Wordmark to="/" />
         {gardenList.length > 0 && (
           <GardenSign
             gardens={gardenList}

@@ -1,5 +1,5 @@
 import { ToolLoopAgent, Output, isStepCount, jsonSchema, tool, type JSONSchema7 } from "ai";
-import { createGoogle } from "@ai-sdk/google";
+import { createGoogleVertex, type GoogleVertexProviderSettings } from "@ai-sdk/google-vertex";
 import { Value } from "@sinclair/typebox/value";
 import type { TSchema } from "elysia";
 import { ChatOutput, InsightOutput } from "./schemas";
@@ -20,8 +20,28 @@ export interface RunInput {
 }
 export interface AgentRunner { run(input: RunInput): Promise<unknown> }
 
+type VertexConfig = { project: string; location: string };
+type VertexDependencies = Pick<GoogleVertexProviderSettings, "fetch" | "googleAuthOptions">;
+export const geminiProviderOptions = { vertex: { thinkingConfig: { thinkingLevel: "medium" as const } } };
+
+export function createGeminiModel(config: VertexConfig, dependencies: VertexDependencies = {}) {
+  return createGoogleVertex({
+    ...config, ...dependencies,
+    // Force project-scoped ADC even if an old express-mode key is exported.
+    apiKey: "",
+  })("gemini-3.8-flash");
+}
+
 function schema(value: TSchema) {
-  return jsonSchema<Record<string, unknown>>(JSON.parse(JSON.stringify(value)) as JSONSchema7, {
+  const json = JSON.parse(JSON.stringify(value)) as JSONSchema7;
+  // TypeBox object unions have only anyOf at the root. Vertex function
+  // parameters require an explicit object type, even when each branch has it.
+  // Retain the union and validate against the original schema below.
+  if (json.type === undefined && json.anyOf?.length &&
+      json.anyOf.every((branch: JSONSchema7 | boolean) => typeof branch === "object" && branch !== null && branch.type === "object")) {
+    json.type = "object";
+  }
+  return jsonSchema<Record<string, unknown>>(json, {
     validate: data => Value.Check(value, data)
       ? { success: true, value: data as Record<string, unknown> }
       : { success: false, error: new Error("Output does not match the documented schema.") },
@@ -29,7 +49,7 @@ function schema(value: TSchema) {
 }
 
 export class GeminiRunner implements AgentRunner {
-  constructor(private readonly apiKey: string, private readonly fetch?: typeof globalThis.fetch) {}
+  constructor(private readonly config: VertexConfig, private readonly dependencies: VertexDependencies = {}) {}
 
   async run(input: RunInput) {
     const tools = Object.fromEntries(Object.entries(input.tools).map(([name, definition]) => [name, tool({
@@ -40,8 +60,8 @@ export class GeminiRunner implements AgentRunner {
       },
     })]));
     const agent = new ToolLoopAgent({
-      model: createGoogle({ apiKey: this.apiKey, fetch: this.fetch })("gemini-3.8-flash"),
-      providerOptions: { google: { thinkingConfig: { thinkingLevel: "medium" } } },
+      model: createGeminiModel(this.config, this.dependencies),
+      providerOptions: geminiProviderOptions,
       stopWhen: isStepCount(8), maxOutputTokens: 6000, maxRetries: 1,
       instructions: [
         "You are the account-wide garden mentor. Ground claims in provided data; never invent readings or completed care.",

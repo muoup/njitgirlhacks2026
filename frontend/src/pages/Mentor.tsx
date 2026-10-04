@@ -1,7 +1,7 @@
 import { ArrowLeft, Shovel } from "lucide-react";
-import { Link, Navigate } from "react-router";
+import { Navigate } from "react-router";
 
-import { AccountTag, Plank, SideBoard, TitleSign } from "@/components/dashboard/BandHeader";
+import { AccountTag, SideBoard, TitleSign, Wordmark } from "@/components/dashboard/BandHeader";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
 import { GroveStrip } from "@/components/dashboard/GroveBand";
 import { Plaque } from "@/components/dashboard/Panel";
@@ -19,9 +19,7 @@ function SignedIn({ user }: { user: SessionUser }) {
     <div className="flex h-svh min-h-[44rem] flex-col overflow-x-clip bg-background text-foreground lg:min-h-[38rem]">
       <div className="relative">
         <GroveStrip className="h-[250px] [--floor:44px] sm:h-[214px] sm:[--floor:44px]" />
-        <Link to="/dashboard" className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
-          loam
-        </Link>
+        <Wordmark to="/dashboard" />
         <TitleSign
           title="Ask the mentor"
           opposite={
@@ -35,7 +33,7 @@ function SignedIn({ user }: { user: SessionUser }) {
             </SideBoard>
           }
         >
-          <p className="pointer-events-auto mt-3 mb-0 rounded-2xl bg-grove-sky/70 px-3.5 py-1 text-center text-sm text-grove-mist backdrop-blur-sm">
+          <p className="pointer-events-auto mt-3 mb-0 rounded-2xl bg-grove-sky/70 px-3.5 py-1 text-center text-sm text-grove-mist backdrop-blur-sm lg:text-base">
             Ask about your plants, and choose who answers.
           </p>
         </TitleSign>
@@ -45,27 +43,25 @@ function SignedIn({ user }: { user: SessionUser }) {
       {/* Isolated so the forest floor can lie behind the conversation without slipping behind the page. */}
       <div className="relative isolate flex min-h-0 flex-1 flex-col">
         <ForestFloor />
-        <main className="mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-x-12 gap-y-3 px-5 pb-6 sm:px-8 lg:grid-cols-[19rem_minmax(0,1fr)] lg:grid-rows-1 lg:pb-8">
-          {/* The mentor stands behind their nameplate, hat reaching up into the grove. */}
-          <section aria-label="Who answers" className="-mt-20 lg:-mt-28">
-            <MentorFigures persona={persona} className="-mb-3.5 w-28 lg:-mb-8 lg:w-64" />
-            <Plaque title={mentor.name} cut={1}>
-              <p className="-mt-2 mb-4 font-tale text-[1.0625rem] text-grove-mist italic max-lg:hidden">{mentor.manner}</p>
-              <PersonaSwitch />
+        <main className="mx-auto grid min-h-0 w-full max-w-6xl flex-1 grid-rows-[auto_minmax(0,1fr)] gap-x-12 gap-y-3 px-5 pb-6 sm:px-8 lg:grid-cols-[24rem_minmax(0,1fr)] lg:grid-rows-1 lg:pb-8">
+          {/* The mentor stands behind their nameplate, hat reaching up into the grove, and is smaller in a short window. */}
+          <section aria-label="Who answers" className="-mt-20 lg:-mt-28 lg:[--tall:clamp(10rem,(100svh-30rem)*0.8,16rem)]">
+            <MentorFigures persona={persona} className="-mb-3.5 w-28 lg:-mb-[calc(var(--tall)/8)] lg:w-(--tall)" />
+            <Plaque cut={1}>
+              <h2 className="m-0 font-brush text-3xl leading-none font-normal text-grove-parchment lg:text-[2.75rem]">{mentor.name}</h2>
+              <p className="mt-2 mb-0 font-tale text-[1.375rem] leading-snug text-grove-mist italic max-lg:hidden">{mentor.manner}</p>
+              <PersonaSwitch roomy className="mt-4 lg:mt-5" />
             </Plaque>
-            <p className="mt-5 mb-0 px-2.5 text-xs text-muted-foreground max-lg:hidden">
+            <p className="mt-5 mb-0 px-2.5 text-base text-muted-foreground max-lg:hidden">
               Your mentor can see all your gardens. Garden and plant changes need your approval.
             </p>
           </section>
 
-          {/* Nothing frames the conversation: it lies open on the forest floor, over a plank to write on. */}
+          {/* Nothing frames the conversation: it lies open on the forest floor, over the box to write in. */}
           <section aria-label="Ask" className="flex min-h-0 flex-col lg:pt-3">
-            <Conversation className="min-h-0 flex-1" />
-            <div className="relative isolate mt-3 px-4 py-3.5 sm:px-5">
-              <Plank cut="polygon(0 6%, 99.5% 0, 100% 95%, 0.6% 100%)" />
-              <AskBox />
-            </div>
-            <p className="mt-3 mb-0 text-xs text-muted-foreground lg:hidden">
+            <Conversation className="min-h-0 flex-1 lg:text-lg" />
+            <AskBox roomy className="mt-1 px-3" />
+            <p className="mt-2 mb-0 px-3 text-sm text-muted-foreground lg:hidden">
               Your mentor can see all your gardens. Garden and plant changes need your approval.
             </p>
           </section>

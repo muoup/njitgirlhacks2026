@@ -15,7 +15,7 @@ const WITHOUT = new Set(["/", "/about", "/signin", "/signup", "/mentor"]);
 
 /**
  * The conversation with the mentor as a sidebar, on every signed-in page but the mentor's
- * own. While it is away the mentor leans in from the edge of the window to be asked.
+ * own. While it is away the mentor waits in the corner of the window to be asked.
  * Coming from the mentor's page, it is already out.
  */
 export function MentorDock() {
@@ -31,7 +31,7 @@ export function MentorDock() {
     cameFrom.current = pathname;
   }, [pathname, here, setOpen]);
 
-  // Opening by hand puts the caret in the question box, and closing gives focus back to the mentor at the edge.
+  // Opening by hand puts the caret in the question box, and closing gives focus back to the mentor in the corner.
   const input = useRef<HTMLInputElement>(null);
   const peek = useRef<HTMLButtonElement>(null);
   const byHand = useRef(false);
@@ -59,15 +59,15 @@ export function MentorDock() {
         inert={open}
         data-away={open}
         onClick={() => move(true)}
-        // Clipped to its own box, so the part of the mentor past the window's edge stays out of the page's width.
-        className="mentor-peek group fixed right-0 bottom-8 z-40 h-28 w-16 cursor-pointer sm:h-40 sm:w-24 border-0 bg-transparent p-0 outline-none [clip-path:inset(-1rem_0_-1rem_-1rem)]"
+        className="mentor-peek group fixed right-3 bottom-5 z-40 w-20 cursor-pointer border-0 bg-transparent p-0 outline-none sm:right-5 sm:w-28"
       >
-        <MentorFigure persona={persona} className="mentor-peek-figure absolute -right-10 bottom-2 w-24 sm:-right-14 sm:w-32" />
+        {/* All of the mentor is in the window, standing behind the board as they do behind their nameplate. */}
+        <MentorFigure persona={persona} className="mentor-peek-figure block w-full" />
         <span
-          className="absolute right-0 bottom-0 flex items-center gap-1.5 py-1 pr-2.5 pl-3 font-brush text-xl leading-none text-grove-parchment group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-grove-ember-hi"
+          className="relative -mt-3 flex items-center justify-center gap-1.5 py-1 font-brush text-xl leading-none text-grove-parchment group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-grove-ember-hi sm:-mt-4 sm:py-1.5 sm:text-2xl"
           style={{ background: WOOD, clipPath: "polygon(0 12%, 100% 0, 100% 100%, 5% 92%)" }}
         >
-          <MessageCircle aria-hidden="true" className="size-4" />
+          <MessageCircle aria-hidden="true" className="size-4 sm:size-[1.125rem]" />
           Ask
         </span>
       </button>
