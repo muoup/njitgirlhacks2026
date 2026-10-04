@@ -18,8 +18,6 @@ const soil = {
   low: 0, high: 100, healthy: { from: 40, to: 70 },
   bands: [{ from: 0, word: "Dry" }, { from: 25, word: "Drying" }, { from: 40, word: "Damp" }, { from: 70, word: "Wet" }],
 };
-const colour = (label: string): Definition => ({ label, unit: "", tier: "detail", glance: "value",
-  stored: { unit: "count", shown: value => value } });
 
 /**
  * Every metric the grove knows, in the order it shows them. Storage keeps what the monitor
@@ -48,10 +46,6 @@ const definitions: Record<string, Definition> = {
   pressure: { label: "Air pressure", unit: "hPa", tier: "detail", glance: "value",
     stored: { unit: "Pa", shown: value => Math.round(value / 10) / 10 } },
   altitude: { label: "Altitude", unit: "m", tier: "detail", glance: "value" },
-  color_clear: colour("Colour, clear"),
-  color_red: colour("Colour, red"),
-  color_green: colour("Colour, green"),
-  color_blue: colour("Colour, blue"),
 };
 
 export const metricCatalogue: MetricInfoData[] = Object.entries(definitions)
@@ -64,7 +58,7 @@ function wordFor(scale: NonNullable<Definition["scale"]>, value: number) {
 /**
  * A stored reading as the grove shows it: counts placed on their scale, units a gardener
  * reads, and a word wherever the metric has one. A metric the catalogue does not know, or a
- * value that is not in its stored unit, passes through unchanged.
+ * value that is not in its stored unit, passes through unchanged, as does the reading's colour.
  */
 export function calibrate(reading: ReadingData): ReadingData {
   return { ...reading, measurements: reading.measurements.map(measurement => {

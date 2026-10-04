@@ -24,17 +24,13 @@ let bobCookie: string;
 let gardenId: string;
 let plantId: string;
 let key: string;
-const sample: IngestData = { sampleId: "boot-abcd:1", measurements: [
+const sample: IngestData = { sampleId: "boot-abcd:1", color: "#3D8040", measurements: [
   { metric: "soil_moisture_raw", value: 810, unit: "ADC" },
   { metric: "air_quality_raw", value: 50, unit: "raw" },
   { metric: "light_level_raw", value: 400, unit: "ADC" },
   { metric: "pressure", value: 101325, unit: "Pa" },
   { metric: "temperature", value: 23, unit: "°C" },
   { metric: "altitude", value: 25, unit: "m" },
-  { metric: "color_clear", value: 1000, unit: "count" },
-  { metric: "color_red", value: 240, unit: "count" },
-  { metric: "color_green", value: 500, unit: "count" },
-  { metric: "color_blue", value: 250, unit: "count" },
 ] };
 function request(path: string, body?: unknown, session = cookie, method = body === undefined ? "GET" : "POST", headers: Record<string,string> = {}) {
   return runtime.app.handle(new Request(`http://localhost:3001${path}`, { method,
@@ -96,15 +92,17 @@ describe("PostgreSQL-backed app", () => {
     const retried = await request("/api/v1/ingest/readings", sample, "", "POST", { Authorization: `Bearer ${key}` });
     expect(retried.status).toBe(200);
     expect(await retried.json()).toEqual({ ...accepted, duplicate: true });
-    const reordered = { measurements: sample.measurements.map(({ metric, value, unit }) => ({ unit, metric, value })).reverse(), sampleId: sample.sampleId };
+    const reordered = { measurements: sample.measurements.map(({ metric, value, unit }) => ({ unit, metric, value })).reverse(), sampleId: sample.sampleId, color: "#3d8040" };
     expect((await request("/api/v1/ingest/readings", reordered, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(200);
     const conflicting = await request("/api/v1/ingest/readings", { ...sample, measurements: sample.measurements.slice(1) }, "", "POST", { Authorization: `Bearer ${key}` });
     expect(conflicting.status).toBe(409);
+    expect((await request("/api/v1/ingest/readings", { ...sample, color: "#000000" }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(409);
     const dashboard = (await request(`/api/v1/dashboard?gardenId=${gardenId}`));
     expect(dashboard.status).toBe(200);
     const data = await dashboard.json();
     expect(data.meta.source).toBe("backend");
-    expect(data.latestReadings[0].measurements).toHaveLength(10);
+    expect(data.latestReadings[0].measurements).toHaveLength(6);
+    expect(data.latestReadings[0].color).toBe("#3d8040");
     expect(data.devices[0].lastSeenAt).toBe(new Date(now).toISOString());
     const history = await backend.getReadings(alice, plantId, { from: new Date(now-86400000).toISOString(), to: new Date(now).toISOString() });
     expect(history?.readings).toHaveLength(1);
@@ -116,6 +114,11 @@ describe("PostgreSQL-backed app", () => {
     expect((await request("/api/v1/ingest/readings", { ...sample, plantId }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(422);
     expect((await request("/api/v1/ingest/readings", { ...sample, measurements: [{ metric: "soil_moisture_raw", value: 45, unit: "%" }] }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(422);
     expect((await request("/api/v1/ingest/readings", { ...sample, measurements: [sample.measurements[0], sample.measurements[0]] }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(422);
+    // One hex value is the colour; the four channel counts it replaced are no longer taken.
+    for (const color of ["3d8040", "#3d80", "green"]) {
+      expect((await request("/api/v1/ingest/readings", { ...sample, sampleId: "boot-abcd:2", color }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(422);
+    }
+    expect((await request("/api/v1/ingest/readings", { sampleId: "boot-abcd:2", measurements: [{ metric: "color_red", value: 240, unit: "count" }] }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(422);
     expect((await request("/api/v1/gardens", { name: "Cross site" }, cookie, "POST", { Origin: "https://attacker.example" })).status).toBe(403);
   });
   test("memory compare-and-swap rejects competing writes and survives new adapter instances", async () => {

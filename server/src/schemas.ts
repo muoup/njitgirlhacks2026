@@ -51,6 +51,7 @@ export const Reading = t.Object({
   deviceId: Id,
   measuredAt: Timestamp,
   measurements: t.Array(Measurement),
+  color: t.Optional(t.String({ pattern: "^#[0-9a-f]{6}$", description: "The colour the monitor's sensor saw, as a hex value. Absent when it sent none." })),
 });
 export const InsightItem = t.Object({
   id: Id, plantId: t.Union([Id, t.Null()]), text: t.String(),

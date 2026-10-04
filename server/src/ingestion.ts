@@ -9,11 +9,9 @@ export const sensorMetrics = {
   pressure: { unit: "Pa", min: 0, max: 200000 },
   temperature: { unit: "°C", min: -100, max: 150 },
   altitude: { unit: "m", min: -2000, max: 30000 },
-  color_clear: { unit: "count", min: 0, max: 65535, integer: true },
-  color_red: { unit: "count", min: 0, max: 65535, integer: true },
-  color_green: { unit: "count", min: 0, max: 65535, integer: true },
-  color_blue: { unit: "count", min: 0, max: 65535, integer: true },
 } as const;
+/** The colour the monitor's sensor saw, as one value: "#3d8040". */
+export const hexColor = "^#[0-9A-Fa-f]{6}$";
 const SensorMeasurement = t.Union(Object.entries(sensorMetrics).map(([metric, definition]) => t.Object({
   metric: t.Literal(metric), unit: t.Literal(definition.unit),
   value: "integer" in definition
@@ -24,6 +22,8 @@ export const IngestRequest = t.Object({
   sampleId: t.String({ minLength: 1, maxLength: 120, pattern: "^[A-Za-z0-9_.:-]+$",
     description: "Unique boot ID plus sample counter; reuse unchanged on retries." }),
   measuredAt: t.Optional(t.String({ format: "date-time", description: "Omit if no synchronized clock; first receipt time is used." })),
+  color: t.Optional(t.String({ pattern: hexColor,
+    description: "The colour the sensor saw, as #RRGGBB. Omit it when the colour sensor has no reading." })),
   measurements: t.Array(SensorMeasurement, { minItems: 1, maxItems: 10 }),
 }, { additionalProperties: false });
 export const IngestResponse = t.Object({
@@ -39,6 +39,9 @@ export function validateSample(input: IngestData, now = Date.now()) {
   }
   if (input.measuredAt && (!Number.isFinite(Date.parse(input.measuredAt)) || Date.parse(input.measuredAt) > now + 5 * 60_000)) {
     throw new ApiError(422, "INVALID_READING", "measuredAt must be a valid timestamp no more than five minutes in the future.");
+  }
+  if (input.color !== undefined && !new RegExp(hexColor).test(input.color)) {
+    throw new ApiError(422, "INVALID_READING", "color must be a hex value such as #3d8040.");
   }
   for (const item of input.measurements) {
     const definition = sensorMetrics[item.metric as keyof typeof sensorMetrics];

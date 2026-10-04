@@ -74,6 +74,8 @@ export function History({ plantId, metrics, cut }: { plantId: string; metrics?: 
       );
     };
     const rest = charts(false);
+    // The colour sensor's latest word in the range: one value, so it is shown and not charted.
+    const colour = readings.reduce<string | undefined>((latest, reading) => reading.color ?? latest, undefined);
     body =
       series.length > 0 ? (
         <>
@@ -86,6 +88,13 @@ export function History({ plantId, metrics, cut }: { plantId: string; metrics?: 
               </summary>
               <div className="mt-5">{rest}</div>
             </details>
+          )}
+          {colour && (
+            <p className="mt-6 mb-0 flex items-center gap-2 text-sm text-muted-foreground">
+              <span aria-hidden="true" className="size-4 rounded-sm border" style={{ background: colour }} />
+              Colour seen by the monitor
+              <span className="font-mono text-xs">{colour}</span>
+            </p>
           )}
         </>
       ) : (

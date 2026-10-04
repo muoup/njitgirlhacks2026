@@ -18,7 +18,7 @@ const gardenSelect = `SELECT g.id, g.name,
   (SELECT count(*)::int FROM grove.devices d JOIN grove.plants p ON p.id=d.plant_id WHERE p.garden_id=g.id) AS "deviceCount"
   FROM grove.gardens g`;
 const reading = (row: any): ReadingData => calibrate({ plantId: row.plant_id, deviceId: row.device_id,
-  measuredAt: iso(row.measured_at), measurements: row.measurements });
+  measuredAt: iso(row.measured_at), measurements: row.measurements, ...(row.color ? { color: row.color } : {}) });
 
 export class PostgresBackend implements BackendAdapter {
   private readonly keys: DeviceKeys;
@@ -226,7 +226,9 @@ export class PostgresBackend implements BackendAdapter {
       if (!(await client.query(lookup, [hashKey(key)])).rowCount) throw invalidKey();
       const normalized = { sampleId: input.sampleId, measuredAt: input.measuredAt ? iso(input.measuredAt) : undefined,
         measurements: input.measurements.map(({ metric, value, unit }) => ({ metric, value, unit }))
-          .sort((a,b) => a.metric.localeCompare(b.metric)) };
+          .sort((a,b) => a.metric.localeCompare(b.metric)),
+        // Only when sent, so a sample without a colour hashes as it always has.
+        ...(input.color ? { color: input.color.toLowerCase() } : {}) };
       const bodyHash = hashKey(JSON.stringify(normalized));
       const old = (await client.query("SELECT * FROM grove.ingest_receipts WHERE device_id=$1 AND sample_id=$2", [principal.device_id, input.sampleId])).rows[0];
       if (old) {
@@ -235,8 +237,9 @@ export class PostgresBackend implements BackendAdapter {
       }
       const receivedAt = new Date(this.clock()).toISOString();
       const measuredAt = normalized.measuredAt ?? receivedAt;
-      await client.query(`INSERT INTO grove.sensor_readings(plant_id,device_id,sample_id,measured_at,received_at,measurements)
-        VALUES($1,$2,$3,$4,$5,$6)`, [principal.plant_id, principal.device_id, input.sampleId, measuredAt, receivedAt, JSON.stringify(normalized.measurements)]);
+      await client.query(`INSERT INTO grove.sensor_readings(plant_id,device_id,sample_id,measured_at,received_at,measurements,color)
+        VALUES($1,$2,$3,$4,$5,$6,$7)`, [principal.plant_id, principal.device_id, input.sampleId, measuredAt, receivedAt,
+        JSON.stringify(normalized.measurements), normalized.color ?? null]);
       await client.query("INSERT INTO grove.ingest_receipts(device_id,sample_id,body_hash,measured_at,received_at) VALUES($1,$2,$3,$4,$5)",
         [principal.device_id, input.sampleId, bodyHash, measuredAt, receivedAt]);
       await client.query("UPDATE grove.devices SET last_seen_at=GREATEST(last_seen_at,$2::timestamptz) WHERE id=$1", [principal.device_id, receivedAt]);

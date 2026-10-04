@@ -16,6 +16,8 @@ export interface FixturePlant extends PlantData {
   seed: number;
   /** Absent when the plant has never reported measurements. */
   profiles?: Profile[];
+  /** The colour its monitor's colour sensor sees. */
+  leaf?: string;
 }
 
 function climate(moisture: number, temperature: number, humidity: number, fall?: number): Profile[] {
@@ -33,13 +35,13 @@ const gardens: GardenData[] = [
 ];
 
 const plants: FixturePlant[] = [
-  { id: "plant-basil", gardenId: "garden-back", name: "Basil", species: "Ocimum basilicum", status: "healthy", seed: 1, profiles: climate(52, 21.5, 58) },
-  { id: "plant-mint", gardenId: "garden-back", name: "Mint", species: "Mentha spicata", status: "healthy", seed: 2, profiles: climate(60, 21, 60) },
-  { id: "plant-fern", gardenId: "garden-back", name: "Fern", species: "Nephrolepis exaltata", status: "needs_care", seed: 3, profiles: climate(21, 19.5, 64, 27) },
-  { id: "plant-sage", gardenId: "garden-back", name: "Sage", species: "Salvia officinalis", status: "healthy", seed: 4, profiles: climate(44, 22, 55) },
+  { id: "plant-basil", gardenId: "garden-back", name: "Basil", species: "Ocimum basilicum", status: "healthy", seed: 1, profiles: climate(52, 21.5, 58), leaf: "#4f9140" },
+  { id: "plant-mint", gardenId: "garden-back", name: "Mint", species: "Mentha spicata", status: "healthy", seed: 2, profiles: climate(60, 21, 60), leaf: "#5aa552" },
+  { id: "plant-fern", gardenId: "garden-back", name: "Fern", species: "Nephrolepis exaltata", status: "needs_care", seed: 3, profiles: climate(21, 19.5, 64, 27), leaf: "#8a8f3c" },
+  { id: "plant-sage", gardenId: "garden-back", name: "Sage", species: "Salvia officinalis", status: "healthy", seed: 4, profiles: climate(44, 22, 55), leaf: "#8c9c7e" },
   { id: "plant-thyme", gardenId: "garden-back", name: "Thyme", species: "Thymus vulgaris", seed: 5 },
-  { id: "plant-aloe", gardenId: "garden-sill", name: "Aloe", species: "Aloe vera", status: "healthy", seed: 6, profiles: climate(31, 23, 42) },
-  { id: "plant-pothos", gardenId: "garden-sill", name: "Pothos", species: "Epipremnum aureum", status: "healthy", seed: 7, profiles: climate(55, 22.5, 48) },
+  { id: "plant-aloe", gardenId: "garden-sill", name: "Aloe", species: "Aloe vera", status: "healthy", seed: 6, profiles: climate(31, 23, 42), leaf: "#6fa57c" },
+  { id: "plant-pothos", gardenId: "garden-sill", name: "Pothos", species: "Epipremnum aureum", status: "healthy", seed: 7, profiles: climate(55, 22.5, 48), leaf: "#4c9a46" },
 ];
 
 const devices: (Omit<DeviceData, "lastSeenAt"> & { reports: boolean })[] = [
@@ -87,7 +89,7 @@ export function fixtureReading(plant: FixturePlant, deviceId: string, at: number
   const date = new Date(at);
   const hour = date.getUTCHours() + date.getUTCMinutes() / 60;
   return {
-    plantId: plant.id, deviceId, measuredAt: date.toISOString(),
+    plantId: plant.id, deviceId, measuredAt: date.toISOString(), ...(plant.leaf ? { color: plant.leaf } : {}),
     measurements: (plant.profiles ?? []).map((profile, index) => {
       const daily = Math.sin(((hour - 9) / 24) * 2 * Math.PI) * profile.swing;
       const trend = ((profile.fall ?? 0) * (referenceTime - at)) / WEEK;

@@ -42,7 +42,10 @@ function Gnome() {
   );
 }
 
-/** A wizard: brimmed hat with a bent tip, eyes showing, a long beard and a staff with a lit stone. */
+const MOSS = "#6f9a4a";
+const SILVER = "#dcdad0";
+
+/** A wizard: brimmed hat with a bent tip, eyes showing, silver hair to the shoulders, a moss scarf and a staff with a lit stone. */
 function Wizard() {
   return (
     <>
@@ -57,16 +60,23 @@ function Wizard() {
       <polygon points="30,-72 38,-56 62,-78 54,-92" fill="#393b78" />
       <polygon points="53,-94 65,-94 66,-80 54,-80" fill={SKIN} />
 
-      <polygon points="-20,-128 20,-128 22,-102 14,-88 -14,-88 -22,-102" fill={SKIN} />
-      <polygon points="-22,-106 -12,-98 0,-100 12,-98 22,-106 22,-78 14,-50 5,-28 0,-16 -5,-28 -14,-50 -22,-78" fill="#dcdad0" />
-      <polygon points="0,-100 12,-98 22,-106 22,-78 14,-50 5,-28 0,-16" fill={SHADE} />
-      <polygon points="0,-101 -8,-94 -21,-90 -31,-95 -19,-102 -6,-104" fill="#f6f4ea" />
-      <polygon points="0,-101 8,-94 21,-90 31,-95 19,-102 6,-104" fill="#f6f4ea" />
+      {/* Hair behind the face, falling to the shoulders. */}
+      <polygon points="-22,-126 -31,-108 -33,-86 -26,-74 -8,-80 -8,-104" fill={SILVER} />
+      <polygon points="22,-126 31,-108 33,-86 26,-74 8,-80 8,-104" fill={SILVER} />
+      <polygon points="22,-126 31,-108 33,-86 26,-74 8,-80 8,-104" fill={SHADE} />
+      <polygon points="-20,-128 20,-128 22,-102 13,-86 -13,-86 -22,-102" fill={SKIN} />
       <polygon points="-4,-114 4,-114 7,-103 0,-99 -7,-103" fill="#eab491" />
+      <polygon points="-6,-95 0,-93 6,-95 0,-91" fill={INK} fillOpacity="0.55" />
       <circle cx="-10" cy="-116" r="2.6" fill={INK} />
       <circle cx="10" cy="-116" r="2.6" fill={INK} />
-      <polygon points="-19,-124 -5,-121 -6,-118 -18,-120" fill="#f6f4ea" />
-      <polygon points="19,-124 5,-121 6,-118 18,-120" fill="#f6f4ea" />
+      <polygon points="-18,-123 -5,-121 -6,-119 -17,-120" fill="#f6f4ea" />
+      <polygon points="18,-123 5,-121 6,-119 17,-120" fill="#f6f4ea" />
+
+      {/* The scarf, wound once with an end left hanging. */}
+      <polygon points="-16,-78 -3,-78 -1,-46 -8,-40 -15,-46" fill={MOSS} />
+      <polygon points="-9,-78 -3,-78 -1,-46 -8,-40" fill={SHADE} />
+      <polygon points="-25,-90 -12,-86 12,-86 25,-90 29,-78 20,-72 -20,-72 -29,-78" fill={MOSS} />
+      <polygon points="-25,-90 -12,-86 0,-86 0,-72 -20,-72 -29,-78" fill={LIGHT} />
 
       <polygon points="-54,-124 -30,-134 30,-134 54,-124 30,-119 -30,-119" fill="#393b78" />
       <polygon points="-28,-130 -20,-158 -12,-178 -25,-194 -2,-190 10,-174 20,-152 28,-130" fill="#45488c" />

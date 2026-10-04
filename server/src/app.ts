@@ -180,7 +180,7 @@ export async function createApp(options: {
     }, {
       body: IngestRequest, response: { ...errorResponses, 200: IngestResponse, 201: IngestResponse },
       detail: { tags: ["Ingestion"], operationId: "submitSensorReading", security: [{ plantApiKey: [] }],
-        summary: "Submit one firmware sensor sample", description: "Key determines account, plant, and device. Reuse sampleId unchanged on retries. measuredAt is optional. Raw ADC/AQ/color values are not calibrated percentages, ppm, or lux. No Gemini call is made during ingestion." },
+        summary: "Submit one firmware sensor sample", description: "Key determines account, plant, and device. Reuse sampleId unchanged on retries. measuredAt is optional. Raw ADC/AQ values are not calibrated percentages, ppm, or lux. The colour sensor's reading is one hex value, color. No Gemini call is made during ingestion." },
     })
     .macro({
       authenticated: {

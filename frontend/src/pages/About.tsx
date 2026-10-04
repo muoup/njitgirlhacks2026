@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import { URGENCY, type Urgency, urgencyLabel } from "@/components/dashboard/overview";
+import { Brand } from "@/components/grove/Brand";
 import { GroveSymbols } from "@/components/grove/GroveSymbols";
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { Board } from "@/components/grove/Signpost";
@@ -54,7 +55,7 @@ const PLACES = [
   },
   {
     name: "The mentor",
-    holds: "Burdock the gnome and Alderwick the wizard take questions about your plants. They know the same things and say them differently.",
+    holds: "Burdock the gnome and Moss the wizard take questions about your plants. They know the same things and say them differently.",
   },
 ];
 
@@ -74,7 +75,7 @@ export function About() {
       <GroveSymbols />
       <header className="mx-auto flex max-w-[70rem] items-center justify-between px-5 py-5 sm:px-8">
         <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
-          loam gnome
+          <Brand />
         </Link>
         <Button asChild className="font-bold">
           <Link to="/signin">Get started</Link>
@@ -163,7 +164,7 @@ export function About() {
                     </div>
                   ))}
                 </dl>
-                <Plate number={4} cut={1} caption="Burdock and Alderwick, waiting to be asked." className="mx-auto w-full max-w-[17rem]">
+                <Plate number={4} cut={1} caption="Burdock and Moss, waiting to be asked." className="mx-auto w-full max-w-[17rem]">
                   <MentorsFigure />
                 </Plate>
               </div>
