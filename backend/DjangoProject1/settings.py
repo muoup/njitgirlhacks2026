@@ -79,8 +79,8 @@ WSGI_APPLICATION = 'DjangoProject1.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ["TSDB_NAME"],
-        'USER': os.environ["TSDB_USER"],
+        'NAME': os.environ["tsdb"],
+        'USER': os.environ["tsdbadmin"],
         'PASSWORD': os.environ["TSDB_PASSWORD"],
         'HOST': os.environ["TSDB_HOST"],
         'PORT': os.environ["TSDB_PORT"],
