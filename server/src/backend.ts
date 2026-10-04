@@ -83,7 +83,7 @@ export class MockBackend implements BackendAdapter {
     const device = devices.find(item => item.reports);
     return {
       garden,
-      plants: plants.map(({ seed, profiles, ...plant }) => plant),
+      plants: plants.map(({ seed, profiles, leaf, ...plant }) => plant),
       devices: devices.map(({ reports, ...device }) => ({
         ...device, lastSeenAt: reports ? new Date(latestAt).toISOString() : null,
       })),

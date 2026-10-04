@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import { Brand } from "@/components/grove/Brand";
 import { driftWithPointer } from "@/components/grove/parallax";
 import { Scene } from "@/components/grove/Scene";
 import { Signpost } from "@/components/grove/Signpost";
@@ -26,7 +27,7 @@ export function Landing() {
     >
       <header className="absolute inset-x-0 top-0 z-20 px-[clamp(20px,6vw,96px)] py-5">
         <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
-          loam gnome
+          <Brand />
         </Link>
       </header>
 

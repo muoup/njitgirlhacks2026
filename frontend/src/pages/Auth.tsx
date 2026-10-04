@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { Link, Navigate } from "react-router";
 
+import { Brand } from "@/components/grove/Brand";
 import { NoticeBoard } from "@/components/grove/NoticeBoard";
 import { Scene } from "@/components/grove/Scene";
 import { Button } from "@/components/ui/button";
@@ -177,7 +178,7 @@ export function Auth({ mode }: { mode: Mode }) {
     >
       <header className="absolute inset-x-0 top-0 z-20 px-[clamp(20px,6vw,96px)] py-5">
         <Link to="/" className="font-brush text-4xl leading-none text-grove-parchment no-underline">
-          loam gnome
+          <Brand />
         </Link>
       </header>
 

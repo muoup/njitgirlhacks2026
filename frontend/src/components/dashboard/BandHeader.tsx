@@ -3,6 +3,7 @@ import { ChevronDown, LogOut } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 
+import { Brand } from "@/components/grove/Brand";
 import { Select, SelectContent, SelectItem } from "@/components/ui/select";
 import type { Garden } from "@/lib/api";
 import type { SessionUser } from "@/lib/auth";
@@ -29,7 +30,7 @@ const BOARD_CUT = "polygon(0 5%, 99% 0, 100% 93%, 1% 100%)";
 export function Wordmark({ to }: { to: string }) {
   return (
     <Link to={to} className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
-      loam <span className="sm:max-lg:block">gnome</span>
+      <Brand stacked />
     </Link>
   );
 }

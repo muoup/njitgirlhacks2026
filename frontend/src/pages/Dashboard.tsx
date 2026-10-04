@@ -28,7 +28,7 @@ function Body({ children }: { children: ReactNode }) {
 function LoadingBody() {
   return (
     <Body>
-      <div role="status" aria-label="Loading the garden" className="grid gap-10 pt-16">
+      <div role="status" aria-label="Loading the garden" className="grid gap-24 pt-24 lg:gap-28 lg:pt-28">
         <Skeleton className="h-56 lg:w-[82%]" />
         <Skeleton className="h-40 lg:ml-auto lg:w-[82%]" />
       </div>

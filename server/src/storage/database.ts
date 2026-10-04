@@ -26,7 +26,7 @@ export async function transaction<T>(pool: Pool, work: (client: PoolClient) => P
   } finally { client.release(); }
 }
 
-export const migrationNames = ["001_auth.sql", "002_domain.sql"];
+export const migrationNames = ["001_auth.sql", "002_domain.sql", "003_reading_color.sql"];
 export async function migrate(pool: Pool) {
   return transaction(pool, async client => {
     await client.query("SELECT pg_advisory_xact_lock(784516239)");
@@ -45,7 +45,10 @@ export async function checkDatabase(pool: Pool) {
   const tables = ["auth.user", "auth.session", "auth.account", "auth.verification", "grove.gardens", "grove.plants",
     "grove.devices", "grove.device_keys", "grove.sensor_readings", "grove.ingest_receipts", "grove.memories", "grove.agent_accounts", "grove.mutations"];
   const { rows } = await pool.query("SELECT name, to_regclass(name) IS NOT NULL AS present FROM unnest($1::text[]) AS name", [tables]);
-  if (rows.some(row => !row.present)) throw new Error("Database migrations are missing. Run bun run db:migrate before starting the server.");
+  const missing = "Database migrations are missing. Run bun run db:migrate before starting the server.";
+  if (rows.some(row => !row.present)) throw new Error(missing);
+  const applied = new Set((await pool.query("SELECT name FROM grove.migrations")).rows.map(row => row.name));
+  if (migrationNames.some(name => !applied.has(name))) throw new Error(missing);
   return { connected: true, schemaReady: true,
     timescale: (await pool.query("SELECT extversion FROM pg_extension WHERE extname='timescaledb'")).rows[0]?.extversion ?? null };
 }

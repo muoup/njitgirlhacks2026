@@ -12,15 +12,17 @@ the firmware teammate's next step; this change does not alter that branch.
 | `spl.readPressure()` | `pressure` | `Pa` | Pressure |
 | `spl.readTemperature()` | `temperature` | `°C` | Air temperature |
 | `spl.calcAltitude()` | `altitude` | `m` | Derived altitude, can be negative |
-| `tcs.getRawData(...)` clear | `color_clear` | `count` | Raw uint16 channel |
-| red | `color_red` | `count` | Raw uint16 channel |
-| green | `color_green` | `count` | Raw uint16 channel |
-| blue | `color_blue` | `count` | Raw uint16 channel |
 
-The prototype has no humidity sensor. Send raw color counts rather than the
-sketch's normalized/hex values. Its normalization divides by clear, which can be
-zero; transmitting raw counts avoids that conversion. Omit channels from failed
-or unavailable sensors. Any nonempty subset of the supported metrics is allowed.
+The colour sensor is not a metric. `tcs.getRawData(...)` is sent as one hex value
+in the sample's `color` field, `#RRGGBB`, the value the sketch already prints:
+red, green and blue each divided by clear, times 256, capped at 255 and written as
+two hex digits (pad a single digit with a zero). Leave `color` out when clear is
+zero or the sensor has no reading. Upper or lower case is accepted and stored in
+lower case.
+
+The prototype has no humidity sensor. Omit metrics from failed or unavailable
+sensors. Any nonempty subset of the supported metrics is allowed, with or without
+a colour.
 
 ## Request
 
@@ -33,17 +35,14 @@ Content-Type: application/json
 ```json
 {
   "sampleId": "boot-7f3c:42",
+  "color": "#3d8040",
   "measurements": [
     { "metric": "soil_moisture_raw", "value": 810, "unit": "ADC" },
     { "metric": "air_quality_raw", "value": 50, "unit": "raw" },
     { "metric": "light_level_raw", "value": 400, "unit": "ADC" },
     { "metric": "pressure", "value": 101325, "unit": "Pa" },
     { "metric": "temperature", "value": 23.4, "unit": "°C" },
-    { "metric": "altitude", "value": 25, "unit": "m" },
-    { "metric": "color_clear", "value": 1000, "unit": "count" },
-    { "metric": "color_red", "value": 240, "unit": "count" },
-    { "metric": "color_green", "value": 500, "unit": "count" },
-    { "metric": "color_blue", "value": 250, "unit": "count" }
+    { "metric": "altitude", "value": 25, "unit": "m" }
   ]
 }
 ```
@@ -74,18 +73,18 @@ New sample: 201. Identical retry: 200. Both return:
 ```
 
 A retry returns `duplicate: true` and the original timestamps. JSON field order
-and measurement order do not affect deduplication. Reusing a sample ID with
-changed values returns 409 `SAMPLE_CONFLICT`.
+and measurement order do not affect deduplication, nor does the case of the
+colour. Reusing a sample ID with changed values or a changed colour returns 409
+`SAMPLE_CONFLICT`.
 
 - 401: missing/unknown/revoked key; obtain the current plant key.
-- 400/422: malformed JSON, unsupported metric/unit/value, duplicate metric, or invalid time; fix the payload.
+- 400/422: malformed JSON, unsupported metric/unit/value, duplicate metric, a colour that is not `#RRGGBB`, or invalid time; fix the payload. The four `color_clear`/`color_red`/`color_green`/`color_blue` metrics are no longer accepted.
 - 413: request body too large (server limit 16 KiB).
 - 429: rate limit (120 requests/minute/key, including retries); respect `Retry-After`.
 - 503: database ingestion isn't configured.
 - Network/5xx: retry the same sample with bounded exponential backoff; never generate a new ID just because a response was lost.
 
-Raw ADC and AQ values must be integers from 0 to 65535; color counts have the
-same bounds. Pressure is 0–200000 Pa, temperature -100–150 °C, and altitude
+Raw ADC and AQ values must be integers from 0 to 65535. Pressure is 0–200000 Pa, temperature -100–150 °C, and altitude
 -2000–30000 m. These are input sanity limits, not plant-health thresholds.
 NaN/Infinity and unknown fields are rejected. Each metric occurs at most once.
 
@@ -118,7 +117,8 @@ Agent summaries explicitly describe selected points, not all raw samples.
 Storage keeps exactly what the firmware sent. On the way out, `src/metrics.ts`
 turns each reading into what the dashboard and agent show: soil and light counts
 become positions on a 0-100 calibration with a word (Dry, Damp, Bright), pressure
-becomes hPa, and the other counts lose their unit. The calibration end points in
+becomes hPa, and the other counts lose their unit. A sample's colour is returned
+beside its measurements as the reading's `color`. The calibration end points in
 that file are placeholders until the prototype's sensors are measured. The same
 file is the metric catalogue (label, tier, scale, healthy range) sent with the
 dashboard as `metrics`.

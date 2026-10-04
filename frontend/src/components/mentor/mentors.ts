@@ -26,11 +26,11 @@ export const MENTORS: Record<Persona, Mentor> = {
   },
   wizard: {
     label: "Wizard",
-    name: "Alderwick the wizard",
+    name: "Moss the wizard",
     manner: "Grand, patient and given to omens.",
     color: "#6d70c4",
     greeting: "Ah, a visitor. Ask, and I shall consult the leaves on your behalf.",
-    prompt: "Ask Alderwick about your plants",
+    prompt: "Ask Moss about your plants",
   },
 };
 

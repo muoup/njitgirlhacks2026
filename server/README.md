@@ -101,7 +101,7 @@ revokes credentials. Uploads store samples/device activity and dirty insights
 without calling Gemini.
 
 Supported metrics match origin/sensor_reading_prototype at cabe772: raw soil,
-air-quality, light, pressure, temperature, altitude, and clear/R/G/B channels.
+air-quality, light, pressure, temperature and altitude, plus one hex `color`.
 See [FIRMWARE_API.md](FIRMWARE_API.md) for exact units, payloads, limits, and retries.
 Bodies are limited to 16 KiB and ingestion to 120 requests/minute/key/process.
 

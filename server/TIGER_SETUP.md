@@ -98,6 +98,10 @@ and URL-encode special characters before setting `DATABASE_URL`.
 `db:migrate` applies the checked-in auth/domain SQL once, in a transaction with a
 migration lock. The database role needs permissions to create the `auth`/`grove`
 schemas and tables. Migrations never run automatically on application startup.
+After pulling a version that adds a migration, stop the server, run `bun run
+db:migrate` again and start it: startup refuses a database that is behind.
+`003_reading_color.sql` turns each stored sample's four colour channel counts
+into one hex `color` and marks the affected accounts' insights stale.
 
 `db:check` is read-only and prints `connected`, `schemaReady`, and the TimescaleDB
 extension version. `db:timescale` explicitly converts `grove.sensor_readings` into
