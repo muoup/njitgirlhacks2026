@@ -80,7 +80,7 @@ const KIT = [
   "- meter (metric): where the latest value sits on that metric's scale and healthy range. Only for metrics whose catalogue entry has a scale.",
   "- stat (metric, range 24h or 7d): the latest value and how far it moved over the range.",
   "- chart (range 24h or 7d, metric): that metric over the range, with its healthy range shaded. Needs several samples. Up to two marks, each {at, label}: at is a timestamp inside that metric's history and the range, such as its summary's lowest.at or highest.at or one read with getReadings; label is two to four plain words such as \"Watered\" or \"Driest\". Mark only what the history actually shows, and only when it helps: a mark at the latest reading says nothing.",
-  "- steps (items): what to do, as one to three short imperative sentences under 80 characters each, the most important first.",
+  "- steps (items): what to do, as one to three short imperative sentences under 80 characters each, the most important first. Steps are instructions, in the same neutral wording whoever is speaking: begin with the plain verb for the action (water, move, check, wait), name what it is done to, and say how much or when to stop by something a person can see or feel. No figures of speech, no persona's voice, and no vague amounts such as \"moderate\" or \"a little\": \"Water until it runs from the bottom of the pot.\", not \"Give the soil a moderate drink.\"",
   "Every meter, stat and marked chart names its metric, by its catalogue identifier, and it must be one the plant has reported.",
 ].join("\n");
 
