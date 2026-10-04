@@ -136,6 +136,7 @@ describe("BFF contracts and sessions", () => {
     const operations: { path: string; method: string; body?: object; scoped: boolean }[] = [
       { path: "/api/v1/gardens", method: "POST", body: { name: "New garden" }, scoped: false },
       { path: `/api/v1/gardens/${gardenId}`, method: "DELETE", scoped: true },
+      { path: `/api/v1/gardens/${gardenId}`, method: "PATCH", body: { setting: "indoors" }, scoped: true },
       { path: `/api/v1/gardens/${gardenId}/plants`, method: "POST", body: { name: "Rosemary", species: "Salvia rosmarinus" }, scoped: true },
       { path: `/api/v1/plants/${plantId}`, method: "PATCH", body: { name: "Renamed" }, scoped: true },
       { path: `/api/v1/plants/${plantId}`, method: "DELETE", scoped: true },

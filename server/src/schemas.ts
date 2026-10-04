@@ -1,17 +1,22 @@
 import { t, type Static } from "elysia";
 import { Generation, PlantOverview, Stop } from "./agent/schemas";
 import { Block } from "./agent/blocks";
+import { Forecast, Place } from "./weather";
 
 export const Id = t.String({ minLength: 1 });
 export const Timestamp = t.String({ format: "date-time" });
 export const ErrorResponse = t.Object({
   error: t.Object({ code: t.String(), message: t.String() }),
 });
+export const Setting = t.Union([t.Literal("indoors"), t.Literal("outdoors")], {
+  description: "Whether the garden's plants stand in the weather or behind a window." });
 export const Garden = t.Object({
   id: Id,
   name: t.String(),
   plantCount: t.Integer({ minimum: 0 }),
   deviceCount: t.Integer({ minimum: 0 }),
+  setting: Setting,
+  location: t.Optional(Place),
 });
 export const PlantStatus = t.Union([t.Literal("healthy"), t.Literal("needs_care")], {
   description: "Omitted when plant health has not been assessed.",
@@ -83,6 +88,7 @@ export const DashboardResponse = t.Object({
   latestReadings: t.Array(Reading),
   insights: Insights,
   metrics: t.Array(MetricInfo, { description: "The metric catalogue, in display order." }),
+  forecast: t.Optional(Forecast),
   meta: Meta,
 });
 export const ReadingsQuery = t.Object({
@@ -101,6 +107,11 @@ export const InsightsResponse = t.Object({ insights: Insights, meta: Meta });
 
 const ResourceName = t.String({ minLength: 1, maxLength: 200, pattern: "\\S" });
 export const NewGarden = t.Object({ name: ResourceName });
+export const GardenEdit = t.Object({
+  name: t.Optional(ResourceName), setting: t.Optional(Setting),
+  location: t.Optional(t.Union([Place, t.Null()], { description: "Where the garden is, for its forecast. Null forgets it." })),
+}, { minProperties: 1, description: "The fields to change. One left out keeps its value." });
+export const PlacesResponse = t.Object({ places: t.Array(Place) });
 export const NewPlant = t.Object({ name: ResourceName, species: ResourceName });
 export const PlantEdit = t.Object({ name: t.Optional(ResourceName), species: t.Optional(ResourceName) }, {
   minProperties: 1, description: "The fields to change. One left out keeps its value." });
@@ -129,6 +140,7 @@ export type ReadingsData = Static<typeof ReadingsResponse>;
 export type InsightsResult = Static<typeof InsightsResponse>;
 export type ReadingRange = Static<typeof ReadingsQuery>;
 export type NewPlantData = Static<typeof NewPlant>;
+export type GardenEditData = Static<typeof GardenEdit>;
 export type PlantEditData = Static<typeof PlantEdit>;
 export type PlantResult = Static<typeof PlantResponse>;
 export type ApiKeyData = Static<typeof ApiKey>;

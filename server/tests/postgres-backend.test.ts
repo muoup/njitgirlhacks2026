@@ -9,6 +9,7 @@ import { AgentService } from "../src/agent/service";
 import type { BackendIdentity } from "../src/backend";
 import type { IngestData } from "../src/ingestion";
 import { DomainService } from "../src/domain";
+import type { WeatherSource } from "../src/weather";
 
 const encryptionKey = Buffer.alloc(32, 7).toString("base64");
 const origin = "http://localhost:3000";
@@ -32,6 +33,13 @@ const sample: IngestData = { sampleId: "boot-abcd:1", color: "#3D8040", measurem
   { metric: "temperature", value: 23, unit: "°C" },
   { metric: "altitude", value: 25, unit: "m" },
 ] };
+// Stands in for the forecast service, and counts what it is asked.
+const asked: Array<{ latitude: number; longitude: number }> = [];
+const rainy = { date: "2026-10-06", day: "Tuesday", sky: "Showers" as const, high: 30, low: 25, rain: 8.3, rainChance: 63, sunshine: 6, gust: 14, alerts: ["rain" as const] };
+const weather: WeatherSource = {
+  async search(query) { return query === "Miami" ? [{ name: "Miami, Florida, United States", latitude: 25.77, longitude: -80.19 }] : []; },
+  async forecast(place) { asked.push(place); return { fetchedAt: new Date(now).toISOString(), days: [rainy] }; },
+};
 function request(path: string, body?: unknown, session = cookie, method = body === undefined ? "GET" : "POST", headers: Record<string,string> = {}) {
   return runtime.app.handle(new Request(`http://localhost:3001${path}`, { method,
     headers: { Origin: origin, ...(session ? { Cookie: session } : {}), ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
@@ -42,7 +50,7 @@ beforeAll(async () => {
   await migrate(fixture.pool);
   await migrate(fixture.pool); // Applied migrations must be repeatable.
   backend = new PostgresBackend(fixture.pool, encryptionKey, () => now);
-  runtime = await createApp({ config, backend, authDatabase: authDatabase(fixture.pool) });
+  runtime = await createApp({ config, backend, authDatabase: authDatabase(fixture.pool), weather });
   async function signup(email: string) {
     const response = await request("/api/auth/sign-up/email", { name: email.split("@")[0], email, password: "FixturePassword2026!" }, "");
     expect(response.status).toBe(200);
@@ -83,6 +91,44 @@ describe("PostgreSQL-backed app", () => {
     const ledger = await fixture.pool.query("SELECT result FROM grove.mutations WHERE request_id='plant-1'");
     expect(JSON.stringify(ledger.rows)).not.toContain(key);
     expect((await backend.hydrateDashboard(alice, gardenId))?.devices[0]?.lastSeenAt).toBeNull();
+  });
+  test("a garden's owner alone can say where it is, and its dashboard then carries a forecast", async () => {
+    const before = (await backend.listGardens(alice)).gardens[0]!;
+    expect(before).toMatchObject({ setting: "indoors" });
+    expect(before.location).toBeUndefined();
+    expect((await (await request(`/api/v1/dashboard?gardenId=${gardenId}`)).json()).forecast).toBeUndefined();
+    expect(asked).toHaveLength(0);
+    expect(await (await request("/api/v1/places?query=Miami")).json()).toEqual({ places: [{ name: "Miami, Florida, United States", latitude: 25.77, longitude: -80.19 }] });
+    expect((await request("/api/v1/places?query=M")).status).toBe(422);
+    const version = async () => (await fixture.pool.query("SELECT data_version FROM grove.agent_accounts WHERE account_id=$1", [alice.accountId])).rows[0].data_version;
+    const start = await version();
+
+    const place = { name: " Miami, Florida, United States ", latitude: 25.77427, longitude: -80.19366 };
+    expect((await request(`/api/v1/gardens/${gardenId}`, { setting: "outdoors", location: place }, bobCookie, "PATCH")).status).toBe(404);
+    expect((await request(`/api/v1/gardens/${gardenId}`, { setting: "outdoors", location: place }, "", "PATCH")).status).toBe(401);
+    for (const invalid of [{}, { setting: "balcony" }, { location: { name: "Nowhere", latitude: 91, longitude: 0 } }, { location: { name: "Half", latitude: 1 } }]) {
+      expect((await request(`/api/v1/gardens/${gardenId}`, invalid, cookie, "PATCH")).status).toBe(422);
+    }
+    const placed = await request(`/api/v1/gardens/${gardenId}`, { setting: "outdoors", location: place }, cookie, "PATCH");
+    expect(placed.status).toBe(200);
+    const garden = { ...before, setting: "outdoors" as const, location: { name: "Miami, Florida, United States", latitude: 25.77, longitude: -80.19 } };
+    expect(await placed.json()).toEqual({ garden });
+    expect((await backend.listGardens(alice)).gardens).toEqual([garden]);
+    // Insights written before the garden had weather are stale; saying the same again changes nothing.
+    expect(await version()).toBe(start + 1);
+    await request(`/api/v1/gardens/${gardenId}`, { setting: "outdoors" }, cookie, "PATCH");
+    expect(await version()).toBe(start + 1);
+
+    const dashboard = await (await request(`/api/v1/dashboard?gardenId=${gardenId}`)).json();
+    expect(dashboard.forecast).toEqual({ place: garden.location.name, fetchedAt: new Date(now).toISOString(), days: [rainy] });
+    expect(asked).toEqual([garden.location]);
+
+    // A name alone leaves the place be; null forgets it.
+    expect((await (await request(`/api/v1/gardens/${gardenId}`, { name: "Sill" }, cookie, "PATCH")).json()).garden).toEqual({ ...garden, name: "Sill" });
+    const cleared = await request(`/api/v1/gardens/${gardenId}`, { name: "Windowsill", setting: "indoors", location: null }, cookie, "PATCH");
+    expect((await cleared.json()).garden).toEqual(before);
+    expect((await (await request(`/api/v1/dashboard?gardenId=${gardenId}`)).json()).forecast).toBeUndefined();
+    await expect(fixture.pool.query("UPDATE grove.gardens SET place='Somewhere' WHERE id=$1", [gardenId])).rejects.toThrow();
   });
   test("firmware can ingest every prototype sensor without a browser session", async () => {
     const response = await request("/api/v1/ingest/readings", sample, "", "POST", { Authorization: `Bearer ${key}` });
@@ -171,7 +217,7 @@ describe("PostgreSQL-backed app", () => {
     expect((await both.json()).plant).toMatchObject({ name: "Basil", species: "Ocimum basilicum 'Genovese'" });
   });
   test("auth sessions and keys survive recreation; rotation immediately rejects old keys", async () => {
-    runtime = await createApp({ config, backend: new PostgresBackend(fixture.pool, encryptionKey, () => now), authDatabase: authDatabase(fixture.pool) });
+    runtime = await createApp({ config, backend: new PostgresBackend(fixture.pool, encryptionKey, () => now), authDatabase: authDatabase(fixture.pool), weather });
     expect((await request("/api/v1/me")).status).toBe(200);
     expect((await (await request(`/api/v1/plants/${plantId}/api-keys`)).json()).apiKey.key).toBe(key);
     const rotated = await request(`/api/v1/plants/${plantId}/api-keys`, {}, cookie);

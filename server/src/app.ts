@@ -15,6 +15,7 @@ import { logFailure } from "./diagnostics";
 import { IngestRequest, IngestResponse } from "./ingestion";
 import { hashKey } from "./storage/keys";
 import { metricCatalogue } from "./metrics";
+import { forecastFor, OpenMeteo, type WeatherSource } from "./weather";
 
 const errorResponses = {
   400: s.ErrorResponse,
@@ -38,11 +39,14 @@ export async function createApp(options: {
   backend?: BackendAdapter;
   authDatabase?: BetterAuthOptions["database"];
   agentRunner?: AgentRunner;
+  weather?: WeatherSource;
 } = {}) {
   const config = options.config ?? loadConfig();
   const backend: BackendAdapter = options.backend ?? new MockBackend();
+  const weather = options.weather ?? new OpenMeteo();
   const agents = new AgentService(backend, options.agentRunner ??
-    (config.agent.project ? new GeminiRunner({ project: config.agent.project, location: config.agent.location }) : undefined));
+    (config.agent.project ? new GeminiRunner({ project: config.agent.project, location: config.agent.location }) : undefined),
+    Date.now, 60_000, weather);
   const domain = new DomainService(backend);
   const ingestLimits = new Map<string, { at: number; count: number }>();
   function requestId(request: Request) {
@@ -79,7 +83,7 @@ export async function createApp(options: {
     info: {
       title: "Grove BFF",
       version: "0.1.0",
-      description: "Cookie-authenticated garden backend with PostgreSQL/TimescaleDB storage, plant-key sensor ingestion, and Gemini chat/scheduled insights. Without database configuration, development uses fixtures.",
+      description: "Cookie-authenticated garden backend with PostgreSQL/TimescaleDB storage, plant-key sensor ingestion, and Gemini chat/scheduled insights, and seven-day forecasts from Open-Meteo for gardens with a location. Without database configuration, development uses fixtures.",
     },
     tags: [
       ...authSchema.tags,
@@ -240,6 +244,32 @@ export async function createApp(options: {
           description: "Checks ownership and cascades to plants, devices, readings, and firmware credentials. Mock storage returns 501.",
         },
       })
+      .patch("/gardens/:id", async ({ identity, params, body, request }) => {
+        checkOrigin(request);
+        if (!(await backend.listGardens(identity)).gardens.some(garden => garden.id === params.id)) {
+          throw new ApiError(404, "NOT_FOUND", "Garden not found.");
+        }
+        if (!backend.updateGarden) throw new ApiError(501, "NOT_IMPLEMENTED", "Garden changes await the backend protocol.");
+        const result = await backend.updateGarden(identity, params.id, body);
+        agents.invalidate(identity);
+        return result;
+      }, {
+        params: t.Object({ id: s.Id }), body: s.GardenEdit,
+        response: { 200: s.GardenResponse, 501: s.ErrorResponse },
+        detail: {
+          tags: ["Gardens"], summary: "Rename a garden, or say where it is", operationId: "updateGarden",
+          description: "Changes the name, the setting (indoors or outdoors) or the location; a field left out keeps its value, and a null location forgets it. A garden with a location gets a forecast on its dashboard. Coordinates are kept to two decimal places. Mock storage returns 501.",
+        },
+      })
+      .get("/places", async ({ query }) => {
+        try { return { places: await weather.search(query.query.trim()) }; }
+        catch (error) { throw new ApiError(502, "WEATHER_UNAVAILABLE", "Places could not be looked up. Try again shortly.", { cause: error }); }
+      }, {
+        query: t.Object({ query: t.String({ minLength: 2, maxLength: 100, pattern: "\\S" }) }),
+        response: { 200: s.PlacesResponse },
+        detail: { tags: ["Gardens"], summary: "Find a town to place a garden in", operationId: "searchPlaces",
+          description: "Up to five matches for a town name or postcode, from Open-Meteo's geocoding. Send one back in PATCH /gardens/:id." },
+      })
       .post("/gardens/:id/plants", async ({ identity, params, body, set, request }) => {
         checkOrigin(request);
         set.headers["Cache-Control"] = "no-store";
@@ -287,7 +317,8 @@ export async function createApp(options: {
       .get("/dashboard", async ({ identity, query }) => {
         const dashboard = await backend.hydrateDashboard(identity, query.gardenId);
         if (!dashboard) throw new ApiError(404, "NOT_FOUND", "Garden not found.");
-        return { ...dashboard, insights: agents.decorate(identity, dashboard.insights, dashboard) };
+        const forecast = await forecastFor(weather, dashboard.garden);
+        return { ...dashboard, insights: agents.decorate(identity, dashboard.insights, dashboard), ...(forecast ? { forecast } : {}) };
       }, {
         query: t.Object({ gardenId: s.Id }),
         response: { 200: s.DashboardResponse },

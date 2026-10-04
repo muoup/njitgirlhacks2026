@@ -144,6 +144,7 @@ function SignedIn({ user }: { user: SessionUser }) {
                   onPlantRemoved={plantId =>
                     editBed(bed.garden.id, current => ({ ...current, plants: current.plants.filter(plant => plant.id !== plantId) }))
                   }
+                  onEdited={garden => editBed(bed.garden.id, current => ({ ...current, garden }))}
                   onRemoved={() => editBed(bed.garden.id, () => null)}
                 />
               </div>

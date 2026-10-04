@@ -26,6 +26,8 @@ Defaults: frontend http://localhost:3000, server http://localhost:3001.
 - Checks: `bun run typecheck`, `bun test`.
 - Database setup: `bun run db:migrate`, `bun run db:check`, `bun run db:timescale`.
 - Forgotten password: `bun run auth:password EMAIL` asks for a new one and stores it.
+- Weather: a garden with a location gets a seven-day forecast from Open-Meteo (no
+  key needed); see the Weather section of [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md).
 
 ## Storage and authentication
 
@@ -66,11 +68,13 @@ is never seeded in database mode or ordinary production.
 | GET /api/v1/me | Current user/account |
 | GET /api/v1/gardens | Account gardens with plant/device counts |
 | POST /api/v1/gardens | Create `{ name }`, returns 201 `{ garden }` |
+| PATCH /api/v1/gardens/:id | Change name, setting (`indoors`/`outdoors`) and/or `location`; null forgets it; 200 |
+| GET /api/v1/places?query=... | Up to five towns matching a name, for a garden's location |
 | DELETE /api/v1/gardens/:id | Delete garden, plants, devices, readings, keys; 204 |
 | POST /api/v1/gardens/:id/plants | Create `{ name, species }`, device and key; 201 `{ plant, apiKey }` |
 | PATCH /api/v1/plants/:id | Change name and/or species; readings and key are kept; 200 |
 | DELETE /api/v1/plants/:id | Delete plant/device/readings/key; 204 |
-| GET /api/v1/dashboard?gardenId=... | Garden, plants/devices, latest samples, insights |
+| GET /api/v1/dashboard?gardenId=... | Garden, plants/devices, latest samples, insights, and a forecast when the garden has a location |
 | GET /api/v1/plants/:id/readings?from=...&to=... | Inclusive ISO range, at most 7 days |
 | GET /api/v1/gardens/:id/insights | Saved insight output and generation metadata |
 | GET /api/v1/plants/:id/api-keys | Owner-only retrieval of recoverable encrypted key |

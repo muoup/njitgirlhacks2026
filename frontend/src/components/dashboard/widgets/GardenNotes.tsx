@@ -68,7 +68,7 @@ export function GardenNotes({ view }: { view: DashboardView }) {
               const urgency = view.overviews.find(overview => overview.plantId === plant?.id)?.urgency;
               return (
                 <div key={index} className="min-w-0" style={{ "--chart-1": urgency ? URGENCY[urgency].color : undefined } as CSSProperties}>
-                  <BlockView block={block} plantId={plant?.id ?? ""} reading={plant && latestReading(view.dashboard, plant.id)} subject={plant?.name} />
+                  <BlockView block={block} plantId={plant?.id ?? ""} reading={plant && latestReading(view.dashboard, plant.id)} subject={plant?.name} forecast={view.dashboard.forecast} />
                 </div>
               );
             })}

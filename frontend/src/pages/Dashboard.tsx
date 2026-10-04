@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { AccountTag, GardenSign, SideBoard, TitleSign, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
+import { isWarning } from "@/components/dashboard/forecast";
 import { layoutFor, type WidgetSpec } from "@/components/dashboard/layout";
 import { MetricCatalogue } from "@/components/dashboard/metrics";
 import { type PlantOverview, standInOverviews, URGENCY, type Urgency } from "@/components/dashboard/overview";
@@ -37,7 +38,9 @@ function LoadingBody() {
 }
 
 /** The stone marking a stop takes the colour of the plant the stop is about. */
-function stopColor(spec: WidgetSpec, overviews: PlantOverview[]) {
+function stopColor(spec: WidgetSpec, overviews: PlantOverview[], dashboard: DashboardResponse) {
+  // The forecast's stone lights up when the next three days hold weather to be ready for.
+  if (spec.type === "weather") return dashboard.forecast?.days.slice(0, 3).some(day => day.alerts.some(isWarning)) ? URGENCY.watch.color : undefined;
   if (spec.type !== "plant") return undefined;
   const urgency = overviews.find(overview => overview.plantId === spec.plantId)?.urgency;
   return urgency ? URGENCY[urgency].color : undefined;
@@ -71,7 +74,7 @@ function GardenBody({ view }: { view: DashboardView }) {
       <Trail
         stops={layoutFor(dashboard, overviews, selectedId).map((spec, index) => ({
           key: `${spec.type}-${index}`,
-          color: stopColor(spec, overviews),
+          color: stopColor(spec, overviews, dashboard),
           node: <Widget spec={spec} index={index} view={view} />,
         }))}
       />

@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { MapPin, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -9,6 +9,7 @@ import { api, type ApiKey, type Garden, type Plant } from "@/lib/api";
 import { useAction } from "./action";
 import { Confirm } from "./Confirm";
 import { Packet, PacketField } from "./Packet";
+import { PlacePacket } from "./PlacePacket";
 import { PlantRow } from "./PlantRow";
 
 export interface Bed {
@@ -25,6 +26,7 @@ export function GardenBed({
   onPlanted,
   onPlantEdited,
   onPlantRemoved,
+  onEdited,
   onRemoved,
 }: {
   bed: Bed;
@@ -35,9 +37,11 @@ export function GardenBed({
   onPlanted: (plant: Plant, apiKey: ApiKey) => void;
   onPlantEdited: (plant: Plant) => void;
   onPlantRemoved: (plantId: string) => void;
+  onEdited: (garden: Garden) => void;
   onRemoved: () => void;
 }) {
   const [planting, setPlanting] = useState(false);
+  const [placing, setPlacing] = useState(false);
   const [asking, setAsking] = useState(false);
   const plant = useAction();
   const remove = useAction();
@@ -57,13 +61,18 @@ export function GardenBed({
             </Link>
           </h2>
           <p className="m-0 mt-1 text-sm text-muted-foreground">
-            {plants.length === 1 ? "1 plant" : `${plants.length} plants`}
+            {plants.length === 1 ? "1 plant" : `${plants.length} plants`} · {garden.setting}
+            {garden.location ? ` · ${garden.location.name}` : " · no place set"}
           </p>
         </div>
         <div className="flex items-center gap-1">
           <Button size="sm" className="font-bold" disabled={planting} onClick={() => setPlanting(true)}>
             <Plus />
             Plant
+          </Button>
+          <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={placing} onClick={() => setPlacing(true)}>
+            <MapPin />
+            Place
           </Button>
           <Button
             size="sm"
@@ -103,6 +112,18 @@ export function GardenBed({
         <p role="alert" className="mt-2 mb-0 text-sm text-grove-watch">
           {remove.error}
         </p>
+      )}
+
+      {placing && (
+        <PlacePacket
+          garden={garden}
+          className="-mx-6 mt-3 sm:-mx-8"
+          onCancel={() => setPlacing(false)}
+          onSaved={saved => {
+            onEdited(saved);
+            setPlacing(false);
+          }}
+        />
       )}
 
       {plants.length > 0 ? (

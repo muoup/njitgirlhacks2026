@@ -3,6 +3,12 @@ import { type FormEvent, type ReactNode, useId } from "react";
 import { cn } from "@/lib/utils";
 
 const INK = "text-[#2b2116]";
+/** The small heading over a line on a packet, and the ruled line itself, for packets that lay out their own fields. */
+export const PACKET_LABEL = "text-xs font-bold tracking-wide uppercase opacity-70";
+export const PACKET_INPUT = cn(
+  "w-full min-w-0 rounded-none border-0 border-b-2 border-[#2b2116]/35 bg-transparent px-0.5 py-1 font-sans text-base outline-none placeholder:text-[#2b2116]/40 focus-visible:border-[#2b2116] focus-visible:bg-[#2b2116]/5",
+  INK,
+);
 
 /**
  * A seed packet: the paper form for putting something new in the ground. `onSubmit` gets
@@ -86,7 +92,7 @@ export function PacketField({
   const id = useId();
   return (
     <div className="grid min-w-0 gap-1">
-      <label htmlFor={id} className="text-xs font-bold tracking-wide uppercase opacity-70">
+      <label htmlFor={id} className={PACKET_LABEL}>
         {label}
       </label>
       <input
@@ -99,10 +105,7 @@ export function PacketField({
         // Whitespace alone is not a name.
         pattern=".*\S.*"
         maxLength={60}
-        className={cn(
-          "w-full min-w-0 rounded-none border-0 border-b-2 border-[#2b2116]/35 bg-transparent px-0.5 py-1 font-sans text-base outline-none placeholder:text-[#2b2116]/40 focus-visible:border-[#2b2116] focus-visible:bg-[#2b2116]/5",
-          INK,
-        )}
+        className={PACKET_INPUT}
       />
     </div>
   );

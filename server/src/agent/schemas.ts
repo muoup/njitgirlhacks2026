@@ -49,6 +49,7 @@ export const Stop = t.Union([
   t.Object({ type: t.Literal("plant"), plantId: Id }),
   t.Object({ type: t.Literal("calm-plants"), plantIds: t.Array(Id, { minItems: 1 }) }),
   t.Object({ type: t.Literal("garden-notes") }),
+  t.Object({ type: t.Literal("weather") }, { description: "The week's forecast. Only for a garden that has one." }),
 ]);
 export const Generation = t.Object({
   state: t.Union([t.Literal("unavailable"), t.Literal("ready"), t.Literal("refreshing"),
@@ -70,7 +71,7 @@ export const InsightOutput = t.Object({ gardens: t.Array(t.Object({
     needsFollowUp: t.Boolean() }), { maxItems: 30 }),
   blocks: t.Optional(t.Array(GeneratedBlock)),
   layout: t.Optional(t.Array(t.Object({
-    type: t.Union([t.Literal("plant"), t.Literal("calm-plants"), t.Literal("garden-notes")]),
+    type: t.Union([t.Literal("plant"), t.Literal("calm-plants"), t.Literal("garden-notes"), t.Literal("weather")]),
     plantId: t.Optional(Id), plantIds: t.Optional(t.Array(Id)),
   }))),
 })) });
