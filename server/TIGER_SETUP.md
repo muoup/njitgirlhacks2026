@@ -128,7 +128,8 @@ BUN_PUBLIC_API_URL=https://api.YOUR_DOMAIN
 ```
 
 Configure your reverse proxy/TLS so those two domains reach frontend port 3000
-and backend port 3001. Using frontend/API subdomains under the same domain keeps
+and backend port 3001, and launch with `FRONTEND_PORT=3000 ./prod.sh` so the
+frontend leaves port 80 to the proxy. Using frontend/API subdomains under the same domain keeps
 browser session handling aligned with this configuration. `localhost` in a
 remote user's browser would target their computer. No proxy or DNS configuration
 is performed by the launcher.

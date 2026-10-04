@@ -18,7 +18,7 @@ Launch the frontend and BFF without hot reload. Each service loads its own .env.
 --demo explicitly allows fixture data and in-memory auth on the deployed VM.
 Accounts, sessions, memory, and insights in demo mode disappear on restart.
 
-Optional: FRONTEND_PORT (default 3000), BFF_PORT (otherwise server/.env PORT).
+Optional: FRONTEND_PORT (default 80), BFF_PORT (otherwise server/.env PORT).
 EOF
 }
 
@@ -37,12 +37,27 @@ if ! command -v bun >/dev/null 2>&1; then
   echo "Bun is required to launch the frontend and BFF." >&2
   exit 1
 fi
+frontend_port="${FRONTEND_PORT:-80}"
+
+# A port below 1024 is refused unless the Bun binary has been allowed to bind it.
+if ! refused="$(PORT="$frontend_port" bun -e 'try { Bun.serve({ port: Number(process.env.PORT), fetch: () => new Response() }).stop(true); }
+  catch (error) { console.log(error.code ?? error.message); process.exit(1); }')"; then
+  echo "The frontend cannot listen on port $frontend_port ($refused)." >&2
+  if [[ "$refused" == EACCES ]]; then
+    cat >&2 <<'HINT'
+Allow Bun to bind ports below 1024, once and again after each Bun upgrade:
+  sudo setcap cap_net_bind_service=+ep "$(readlink -f "$(command -v bun)")"
+or choose another port: FRONTEND_PORT=3000 ./prod.sh
+HINT
+  fi
+  exit 1
+fi
 
 # Validate environment settings before launching either service. Bun loads .env
 # relative to each working directory; don't source credential files as shell code.
 (
   cd "$project_dir/frontend"
-  PORT="${FRONTEND_PORT:-3000}" bun src/lib/config.ts
+  PORT="$frontend_port" bun src/lib/config.ts
 )
 (
   cd "$project_dir/server"
@@ -75,7 +90,7 @@ echo "Starting frontend and BFF in production mode. Press Ctrl+C to stop both."
 
 (
   cd "$project_dir/frontend"
-  export PORT="${FRONTEND_PORT:-3000}"
+  export PORT="$frontend_port"
   # Bun's HTML server bundles, minifies, and caches assets in production mode.
   exec bun run start
 ) &
