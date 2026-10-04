@@ -355,7 +355,7 @@ void loop() {
             client.print("Content-length: ");
             client.println(requestBody.length());
             client.println();
-            client.println(requestBody);
+            client.print(requestBody);
 
             // Await and print response
             read_response();
