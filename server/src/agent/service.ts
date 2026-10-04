@@ -71,6 +71,7 @@ export class AgentService {
   private readonly attempts = new Map<string, number>();
   private readonly busy = new Set<string>();
   private readonly refreshing = new Set<string>();
+  private readonly activities = new Map<string, s.ActivityData>();
 
   constructor(private readonly backend: BackendAdapter, private readonly runner?: AgentRunner,
     private readonly clock: () => number = Date.now, private readonly timeoutMs = 60_000) {
@@ -79,6 +80,8 @@ export class AgentService {
 
   get configured() { return Boolean(this.runner); }
   invalidate(identity: BackendIdentity) { this.cache.delete(identity.accountId); }
+  /** The tool this account's run called last, or nothing when no run is under way or it has called none. */
+  activity(identity: BackendIdentity) { return this.activities.get(identity.accountId) ?? null; }
 
   register(identity: BackendIdentity) {
     this.cleanup();
@@ -184,6 +187,19 @@ export class AgentService {
           } catch (error) { proposed.splice(proposed.indexOf(placeholder), 1); throw error; }
         });
     }
+    // The page shows what a run is doing while it waits. It is told the tool and the name of
+    // what the call is about, never the arguments or what came back.
+    for (const [name, tool] of Object.entries(tools)) {
+      const { execute } = tool;
+      tool.execute = args => {
+        const { gardenId, plantId, name: skill } = (args ?? {}) as Record<string, unknown>;
+        const subject = input.context.gardens.find(item => item.garden.id === gardenId)?.garden.name
+          ?? input.context.gardens.flatMap(item => item.plants).find(plant => plant.id === plantId)?.name
+          ?? (name === "loadSkill" && skillNames.some(known => known === skill) ? skill as string : null);
+        this.activities.set(identity.accountId, { tool: name, subject, step: calls + 1 });
+        return execute(args);
+      };
+    }
     try {
       return await Promise.race([
         this.runner.run({ ...input, tools, signal: controller.signal }),
@@ -197,6 +213,7 @@ export class AgentService {
     } finally {
       clearTimeout(timer!);
       controller.abort(); // Prevent tools from a failed/finished run continuing later.
+      this.activities.delete(identity.accountId);
     }
   }
 

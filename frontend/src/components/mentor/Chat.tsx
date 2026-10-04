@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useMentor } from "./conversation";
-import { type ChatMessage, MENTORS, type Persona, PERSONAS, STARTERS } from "./mentors";
+import { type ChatMessage, MENTORS, type Persona, PERSONAS, STARTERS, working } from "./mentors";
+import "./mentor.css";
 import { Prose } from "./Prose";
 import type { PendingAction } from "@/lib/api";
 
@@ -121,16 +122,40 @@ function ApprovalCard({ action }: { action: PendingAction }) {
 }
 
 /**
+ * Where the reply will be, while it is on its way: three seeds in the colour of the mentor's
+ * hat, bobbing in turn, and what the mentor is doing now. See mentor.css.
+ */
+function Working() {
+  const { persona, task, activity } = useMentor();
+  const mentor = MENTORS[persona];
+  if (!task) return null;
+  const doing = working(task, activity);
+  return (
+    <p className={cn(SAID, "flex items-center gap-3 text-grove-mist")} style={{ borderColor: mentor.color }}>
+      <span className="sr-only">{mentor.name}: </span>
+      <span aria-hidden="true" className="mentor-seeds" style={{ color: mentor.color }}>
+        <span />
+        <span />
+        <span />
+      </span>
+      {/* Keyed so each new thing rises into place. */}
+      <span key={doing} className="mentor-doing">
+        {doing}
+      </span>
+    </p>
+  );
+}
+
+/**
  * What has been said so far, newest at the bottom and kept in view. What the mentor says has
  * the colour of their hat down its edge; what you ask is on wood. Give it a height.
  */
 export function Conversation({ className }: { className?: string }) {
-  const { persona, thread, busy } = useMentor();
+  const { thread, busy } = useMentor();
   const log = useRef<HTMLDivElement>(null);
   const said = useRef<HTMLDivElement>(null);
   // Whether the newest words are in view, so that what loads under them later can be kept in view too.
   const following = useRef(true);
-  const mentor = MENTORS[persona];
 
   useEffect(() => {
     following.current = true;
@@ -187,14 +212,7 @@ export function Conversation({ className }: { className?: string }) {
             </Fragment>
           ),
         )}
-        {busy && (
-          <p className={SAID} style={{ borderColor: mentor.color }}>
-            <span className="sr-only">{mentor.name} is thinking</span>
-            <span aria-hidden="true" className="animate-pulse font-bold tracking-widest">
-              &hellip;
-            </span>
-          </p>
-        )}
+        <Working />
       </div>
     </div>
   );

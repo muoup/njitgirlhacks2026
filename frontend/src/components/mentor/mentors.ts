@@ -1,5 +1,5 @@
 /** Who answers in the mentor's chat. The two differ in voice, not in what they know. */
-import type { ChatResponse, PendingAction } from "@/lib/api";
+import type { ChatResponse, MentorActivity, PendingAction } from "@/lib/api";
 export type Persona = "gnome" | "wizard";
 
 export interface Mentor {
@@ -46,4 +46,28 @@ export interface ChatMessage {
   /** What the mentor asked to have drawn under what they said, and the plants it is about. */
   blocks?: ChatResponse["blocks"];
   plants?: ChatResponse["plants"];
+}
+
+/** What the mentor has been asked to do: answer a question, carry out a decision, or refresh the insights. */
+export type Task = "ask" | "decide" | "refresh";
+
+const WAITING: Record<Task, string> = {
+  ask: "Thinking",
+  decide: "Seeing to it",
+  refresh: "Looking over every garden",
+};
+
+/** What to say the mentor is doing while they work: the last thing their run reached for, or the task itself. */
+export function working(task: Task, activity: MentorActivity | null) {
+  const subject = activity?.subject;
+  switch (activity?.tool) {
+    case "listGardens": return "Looking over your gardens";
+    case "inspectGarden": return subject ? `Walking through ${subject}` : "Walking through a garden";
+    case "getReadings": return subject ? `Reading ${subject}’s history` : "Reading a plant’s history";
+    case "readMemory": return "Checking the notebook";
+    case "updateMemory": return "Writing in the notebook";
+    case "loadSkill": return subject ? `Reading up on ${subject.replaceAll("-", " ")}` : "Reading up";
+    case "proposeAction": return "Drawing up a change for you to approve";
+    default: return WAITING[task];
+  }
 }

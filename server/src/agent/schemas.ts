@@ -35,6 +35,13 @@ export const ChatResponse = t.Object({
   blocks: t.Array(Block, { description: "What to draw under the reply. Each names its plant." }),
   plants: t.Array(t.Object({ id: Id, name: t.String() }), { description: "The plants those blocks are about." }),
 });
+/** What a run is doing, for the page to show while a reply is on its way. Names only. */
+export const Activity = t.Object({
+  tool: t.String({ description: "The tool the run called last." }),
+  subject: t.Union([t.String(), t.Null()], { description: "The garden, plant or skill that call was about, by name." }),
+  step: t.Integer({ minimum: 1, description: "How many tools the run has called." }),
+});
+export const ActivityResponse = t.Object({ activity: t.Union([Activity, t.Null()]) });
 export const DecisionRequest = t.Object({ decision: t.Union([t.Literal("approve"), t.Literal("cancel")]) }, { additionalProperties: false });
 export const DecisionResponse = t.Object({ action: PendingAction });
 const overview = {
@@ -80,6 +87,7 @@ export type MutationData = Static<typeof Mutation>;
 export type PendingActionData = Static<typeof PendingAction>;
 export type ChatRequestData = Static<typeof ChatRequest>;
 export type ChatResponseData = Static<typeof ChatResponse>;
+export type ActivityData = Static<typeof Activity>;
 export type DecisionData = Static<typeof DecisionResponse>;
 export type OverviewData = Static<typeof PlantOverview>;
 export type StopData = Static<typeof Stop>;

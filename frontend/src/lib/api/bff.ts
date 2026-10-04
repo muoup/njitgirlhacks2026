@@ -29,6 +29,7 @@ export function createBffApi(baseUrl: string): GroveApi {
 
   return {
     askMentor: input => request("/chat", "POST", input),
+    getMentorActivity: () => request("/chat/activity"),
     decideAgentAction: (id, decision) => request(`/chat/actions/${encodeURIComponent(id)}/decision`, "POST", { decision }),
     refreshInsights: () => request("/insights/refresh", "POST", {}),
     listGardens: () => request("/gardens"),

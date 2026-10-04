@@ -116,6 +116,7 @@ request to verify credentials. Tests and OpenAPI generation do not call Google.
 | Route | Behavior |
 | --- | --- |
 | POST /api/v1/chat | `{message,persona,requestId,conversationId?}`; shared account context |
+| GET /api/v1/chat/activity | The tool the account's run called last, and what it was about, by name; null when idle |
 | POST /api/v1/chat/actions/:id/decision | Approve/cancel one exact proposed action |
 | POST /api/v1/insights/refresh | Force restricted account-wide generation immediately |
 

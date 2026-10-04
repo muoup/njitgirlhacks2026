@@ -11,8 +11,8 @@ import type {
 } from "../../../../server/src/schemas";
 import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
   PendingActionData as PendingAction, DecisionData as DecisionResponse,
-  RefreshData as RefreshResponse, OverviewData as PlantOverview } from "../../../../server/src/agent/schemas";
-export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, RefreshResponse, PlantOverview };
+  RefreshData as RefreshResponse, OverviewData as PlantOverview, ActivityData as MentorActivity } from "../../../../server/src/agent/schemas";
+export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, RefreshResponse, PlantOverview, MentorActivity };
 
 export type {
   Garden, Plant, PlantStatus, Device, Measurement, MetricInfo, Reading, InsightItem,
@@ -48,6 +48,8 @@ export function notBuilt(error: unknown) {
 
 export interface GroveApi {
   askMentor(request: ChatRequest): Promise<ChatResponse>;
+  /** What the mentor's run is doing now, to show while a reply is on its way. */
+  getMentorActivity(): Promise<{ activity: MentorActivity | null }>;
   decideAgentAction(id: string, decision: "approve" | "cancel"): Promise<DecisionResponse>;
   refreshInsights(): Promise<RefreshResponse>;
   listGardens(): Promise<GardensResponse>;

@@ -336,6 +336,14 @@ export async function createApp(options: {
         detail: { tags: ["Agent"], operationId: "askMentor", summary: "Chat with the account-wide garden mentor",
           description: "Gnome and wizard share all account gardens and MEMORY.md. Conversations and request deduplication last one hour in this process. Additions/removals return proposals for explicit popup approval." },
       })
+      .get("/chat/activity", ({ identity, set }) => {
+        set.headers["Cache-Control"] = "no-store";
+        return { activity: agents.activity(identity) };
+      }, {
+        response: { 200: a.ActivityResponse },
+        detail: { tags: ["Agent"], operationId: "getMentorActivity", summary: "What the account's mentor run is doing now",
+          description: "The tool a chat or insight run called last and the name of the garden, plant or skill it concerned, for a page to show while it waits. Null when no run is under way or it has called no tool. Never carries arguments or results." },
+      })
       .post("/chat/actions/:id/decision", ({ identity, params, body, request, set }) => {
         checkOrigin(request);
         set.headers["Cache-Control"] = "no-store";

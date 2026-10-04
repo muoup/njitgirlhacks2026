@@ -2,10 +2,10 @@ import { createContext, type ReactNode, useContext, useEffect, useRef, useState 
 
 import { failureMessage } from "@/components/shed/action";
 import { auth } from "@/lib/auth";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type MentorActivity } from "@/lib/api";
 import { notifyDataChanged } from "@/lib/data-events";
 import { createRequestId } from "@/lib/request-id";
-import { type ChatMessage, MENTORS, type Persona } from "./mentors";
+import { type ChatMessage, MENTORS, type Persona, type Task } from "./mentors";
 
 interface MentorChat {
   persona: Persona;
@@ -14,6 +14,10 @@ interface MentorChat {
   setDraft: (draft: string) => void;
   /** Whether a reply is on its way. */
   busy: boolean;
+  /** What the mentor was asked to do, while they are doing it. */
+  task: Task | null;
+  /** The last thing their run reached for, once it has reached for something. */
+  activity: MentorActivity | null;
   error: string | null;
   /** Whether anything has been asked, so there is something to lose by starting again. */
   started: boolean;
@@ -45,7 +49,9 @@ export function MentorProvider({ children }: { children: ReactNode }) {
   const [thread, setThread] = useState(() => fresh("gnome"));
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [task, setTask] = useState<Task | null>(null);
+  const [activity, setActivity] = useState<MentorActivity | null>(null);
+  const busy = task !== null;
   const [error, setError] = useState<string | null>(null);
   // Counts conversations, so a reply to one that has since been cleared is dropped.
   const conversation = useRef(0);
@@ -64,13 +70,30 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     };
   }, [who]);
 
-  function run(during: number, work: () => Promise<void>) {
-    setBusy(true);
+  // While the mentor works, ask what they are doing. Nothing depends on the answer, so an ask that fails is let go.
+  useEffect(() => {
+    if (!task || task === "decide") return;
+    let waiting = true;
+    const timer = setInterval(() => {
+      api.getMentorActivity().then(({ activity: next }) => {
+        // Answers can arrive out of order; a run only ever moves forward.
+        if (waiting) setActivity(current => (next && current && next.step < current.step ? current : next));
+      }, () => {});
+    }, 1000);
+    return () => {
+      waiting = false;
+      clearInterval(timer);
+      setActivity(null);
+    };
+  }, [task]);
+
+  function run(during: number, doing: Task, work: () => Promise<void>) {
+    setTask(doing);
     setError(null);
     void work().catch(error => {
       if (during === conversation.current) setError(failureMessage(error));
     }).finally(() => {
-      if (during === conversation.current) { setBusy(false); sending.current = false; }
+      if (during === conversation.current) { setTask(null); sending.current = false; }
     });
   }
 
@@ -78,7 +101,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     conversation.current += 1;
     serverConversation.current = undefined;
     sending.current = false;
-    setBusy(false);
+    setTask(null);
     setError(null);
     setThread(fresh(withPersona));
   }
@@ -96,7 +119,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     setThread(asked);
     setDraft("");
     sending.current = true;
-    run(during, async () => {
+    run(during, "ask", async () => {
       try {
         const response = await api.askMentor({ persona, message: text,
           conversationId: serverConversation.current, requestId: createRequestId() });
@@ -118,7 +141,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     if (sending.current) return;
     const during = conversation.current;
     sending.current = true;
-    run(during, async () => {
+    run(during, "decide", async () => {
       try {
         const { action } = await api.decideAgentAction(id, decision);
         if (during !== conversation.current) return;
@@ -132,7 +155,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     if (sending.current) return;
     const during = conversation.current;
     sending.current = true;
-    run(during, async () => {
+    run(during, "refresh", async () => {
       try {
         await api.refreshInsights();
         if (during !== conversation.current) return;
@@ -145,7 +168,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
   return (
     <Context
       value={{
-        persona, thread, draft, setDraft, busy, error, change, ask, decide, refresh, open, setOpen,
+        persona, thread, draft, setDraft, busy, task, activity, error, change, ask, decide, refresh, open, setOpen,
         started: thread.some(message => message.from === "you"),
         clear: () => startAgain(persona),
       }}

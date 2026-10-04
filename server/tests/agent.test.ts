@@ -292,6 +292,26 @@ describe("garden agent harness", () => {
     await expect(disabled.chat(alice, { persona: "gnome", message: "Hello", requestId: "disabled" })).rejects.toMatchObject({ code: "AGENT_NOT_CONFIGURED" });
   });
 
+  test("a run reports the tool it called last, by name only, and nothing once it has ended", async () => {
+    const seen: unknown[] = [];
+    const agents: AgentService = new AgentService(new MockBackend(() => initialTime), new Runner(async input => {
+      const { garden, plants } = input.context.gardens[0]!;
+      seen.push(agents.activity(alice));
+      await input.tools.inspectGarden!.execute({ gardenId: garden.id });
+      seen.push(agents.activity(alice));
+      await input.tools.getReadings!.execute({ plantId: plants[0]!.id, from: "2026-10-02T12:00:00Z", to: "2026-10-03T12:00:00Z" });
+      seen.push(agents.activity(alice));
+      await input.tools.loadSkill!.execute({ name: "watering" });
+      seen.push(agents.activity(alice), agents.activity(bob), [garden.name, plants[0]!.name]);
+      return { reply: "Done." };
+    }), () => initialTime);
+    await agents.chat(alice, { persona: "gnome", message: "How is the first plant?", requestId: "activity" });
+    const [garden, plant] = seen.pop() as string[];
+    expect(seen).toEqual([null, { tool: "inspectGarden", subject: garden, step: 1 },
+      { tool: "getReadings", subject: plant, step: 2 }, { tool: "loadSkill", subject: "watering", step: 3 }, null]);
+    expect(agents.activity(alice)).toBeNull();
+  });
+
   test("real SDK serialization fixes the model and medium thinking without network access", async () => {
     let requestBody: any;
     let requestURL = "";
@@ -398,6 +418,8 @@ describe("garden agent harness", () => {
     expect(chat.status).toBe(200);
     expect((await chat.json()).reply).toBe("Hello gardener.");
     expect((await post("/api/v1/chat", { persona: "wizard", message: " ", requestId: "bad" }, cookie)).status).toBe(422);
+    expect((await app.handle(new Request("http://localhost:3001/api/v1/chat/activity"))).status).toBe(401);
+    expect(await (await app.handle(new Request("http://localhost:3001/api/v1/chat/activity", { headers: { Cookie: cookie } }))).json()).toEqual({ activity: null });
     const spec = await (await app.handle(new Request("http://localhost:3001/openapi/json"))).json();
     for (const path of ["/api/v1/chat", "/api/v1/chat/actions/{id}/decision", "/api/v1/insights/refresh"]) {
       expect(spec.paths[path].post.security).toEqual([{ bffSession: [] }]);
