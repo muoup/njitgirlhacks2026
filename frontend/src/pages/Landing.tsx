@@ -42,7 +42,7 @@ export function Landing() {
             <Sparkle delay={-1.8} />
           </p>
           <p className="mt-5 mb-0 text-[clamp(0.7rem,0.55rem_+_0.3vw,0.95rem)] font-bold tracking-[0.28em] text-grove-mist uppercase">
-            A soil monitor for garden beds
+            Your helpful hand to manage your garden grove
           </p>
         </div>
 
