@@ -29,9 +29,9 @@ function climate(moisture: number, temperature: number, humidity: number, fall?:
 }
 
 const gardens: GardenData[] = [
-  { id: "garden-back", name: "Back garden", plantCount: 5, deviceCount: 2 },
-  { id: "garden-sill", name: "Windowsill", plantCount: 2, deviceCount: 1 },
-  { id: "garden-new", name: "New bed", plantCount: 0, deviceCount: 0 },
+  { id: "garden-back", name: "Back garden", plantCount: 5, deviceCount: 2, setting: "outdoors" },
+  { id: "garden-sill", name: "Windowsill", plantCount: 2, deviceCount: 1, setting: "indoors" },
+  { id: "garden-new", name: "New bed", plantCount: 0, deviceCount: 0, setting: "outdoors" },
 ];
 
 const plants: FixturePlant[] = [

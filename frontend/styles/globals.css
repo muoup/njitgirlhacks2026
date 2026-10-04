@@ -17,6 +17,7 @@
   --color-grove-ok: var(--grove-ok);
   --color-grove-watch: var(--grove-watch);
   --color-grove-act: var(--grove-act);
+  --color-grove-rain: var(--grove-rain);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -104,14 +105,16 @@
   --grove-near-2: #305739;
   --grove-near-3: #213d28;
   --grove-front: #0b1810;
-  /* The forest floor under the dashboard: moss, shade, fallen leaves, and the moonlit clearing behind a stop. */
-  --grove-moss: #142b1c;
-  --grove-moss-hi: #183220;
+  /* The lawn under the dashboard: its lighter and darker reaches, the dark under things, fallen leaves, and the short grass behind a stop. */
+  --grove-lawn: #14301f;
+  --grove-lawn-hi: #173624;
+  --grove-lawn-lo: #112a1b;
   --grove-shade: #0c1c14;
   --grove-leaf: #4a3a22;
   --grove-leaf-hi: #5c4829;
-  --grove-clearing: #122719;
-  --grove-clearing-hi: #152c1d;
+  --grove-clearing: #11281a;
+  /* The stepping stones of the trail across it. */
+  --grove-stone: #56665b;
   --grove-ember: #e3ab76;
   --grove-ember-hi: #f6dcae;
   --grove-parchment: #f3ead2;
@@ -124,6 +127,8 @@
   --grove-ok: #9fd89a;
   --grove-watch: #f2b648;
   --grove-act: #f0694f;
+  /* Rain, wherever a forecast shows it. */
+  --grove-rain: #a9d8f5;
 }
 
 @layer base {

@@ -11,6 +11,7 @@ import { LIMITS, proseProblems } from "./writing";
 import { describeBlock, publishable } from "./blocks";
 import type { AgentRunner, AgentTool, RunInput } from "./runner";
 import * as s from "./schemas";
+import type { WeatherSource } from "../weather";
 
 const HOUR = 3_600_000;
 interface Conversation {
@@ -31,8 +32,9 @@ const accountIds = (context: AccountContext) =>
  * The order of a garden's stops as generated, or nothing when the page should decide. An
  * order is kept only if every plant has exactly one place, the plants that call for someone
  * each have a stop of their own ahead of everything else, and no kind of group repeats.
+ * A garden with a forecast always has its weather stop, and one without never does.
  */
-function trail(layout: s.InsightOutputData["gardens"][number]["layout"], overviews: s.OverviewData[]): s.StopData[] | undefined {
+function trail(layout: s.InsightOutputData["gardens"][number]["layout"], overviews: s.OverviewData[], forecast: boolean): s.StopData[] | undefined {
   if (!layout?.length) return undefined;
   const stops: s.StopData[] = [];
   const placed = new Set<string>();
@@ -44,6 +46,9 @@ function trail(layout: s.InsightOutputData["gardens"][number]["layout"], overvie
     } else if (stop.type === "calm-plants") {
       if (!stop.plantIds?.length || stops.some(item => item.type === "calm-plants") || !stop.plantIds.every(place)) return undefined;
       stops.push({ type: "calm-plants", plantIds: stop.plantIds });
+    } else if (stop.type === "weather") {
+      if (stops.some(item => item.type === "weather")) return undefined;
+      if (forecast) stops.push({ type: "weather" });
     } else {
       if (stops.some(item => item.type === "garden-notes")) return undefined;
       stops.push({ type: "garden-notes" });
@@ -53,10 +58,15 @@ function trail(layout: s.InsightOutputData["gardens"][number]["layout"], overvie
   const calls = overviews.filter(overview => overview.urgency === "act");
   const first = stops.slice(0, calls.length);
   if (!calls.every(overview => first.some(stop => stop.type === "plant" && stop.plantId === overview.plantId))) return undefined;
-  // The garden's own notes are always reachable.
-  return stops.some(stop => stop.type === "garden-notes") ? stops : [...stops, { type: "garden-notes" }];
+  // The garden's own notes are always reachable, and so is its forecast, just ahead of them.
+  if (!stops.some(stop => stop.type === "garden-notes")) stops.push({ type: "garden-notes" });
+  if (forecast && !stops.some(stop => stop.type === "weather")) {
+    stops.splice(stops.findIndex(stop => stop.type === "garden-notes"), 0, { type: "weather" });
+  }
+  return stops;
 }
 
+// The forecast is left out: it drifts by the hour, and insights are written again hourly anyway.
 const gardenFingerprint = (garden: Pick<AccountContext["gardens"][number], "garden" | "plants" | "devices" | "latestReadings">) =>
   JSON.stringify({ garden: garden.garden, plants: garden.plants, devices: garden.devices, latestReadings: garden.latestReadings });
 
@@ -74,7 +84,8 @@ export class AgentService {
   private readonly activities = new Map<string, s.ActivityData>();
 
   constructor(private readonly backend: BackendAdapter, private readonly runner?: AgentRunner,
-    private readonly clock: () => number = Date.now, private readonly timeoutMs = 60_000) {
+    private readonly clock: () => number = Date.now, private readonly timeoutMs = 60_000,
+    private readonly weather?: WeatherSource) {
     this.domain = new DomainService(backend);
   }
 
@@ -234,7 +245,7 @@ export class AgentService {
       }
       if (!conversation) conversation = { accountId: identity.accountId, history: [], updatedAt: this.clock() };
       const history: RunInput["history"] = [...conversation.history.slice(-20), { role: "user", content: request.message }];
-      const context = await buildContext(this.backend, identity, this.clock());
+      const context = await buildContext(this.backend, identity, this.clock(), this.weather);
       const proposed: ActionRecord[] = [];
       const output = await this.run({ mode: "chat", persona: request.persona, context, history }, identity, proposed, conversationId);
       if (!Value.Check(s.ChatOutput, output)) throw new ApiError(502, "INVALID_AGENT_OUTPUT", "The mentor returned an invalid response.");
@@ -348,7 +359,7 @@ export class AgentService {
         const persisted = await this.backend.readInsightSnapshot?.(identity);
         if (persisted) this.cache.set(identity.accountId, { ...persisted,
           gardens: new Map(persisted.gardens.map(g => [g.insights.gardenId, g])) });
-        const context = await buildContext(this.backend, identity, now);
+        const context = await buildContext(this.backend, identity, now, this.weather);
         const inputRevision = revision(context);
         const previous = this.cache.get(identity.accountId);
         if (!force && previous && !previous.dirty && !this.failures.has(identity.accountId) &&
@@ -361,11 +372,13 @@ export class AgentService {
         for (const garden of output.gardens) {
           const known = context.gardens.find(item => item.garden.id === garden.gardenId)!;
           // A block that cannot be drawn is left out; it is no reason to lose the whole run.
-          const scope = { now, ids: accountIds(context), plants: new Map(known.histories.map(history => [history.plantId, history.metrics])) };
+          const dates = known.forecast?.map(day => day.date) ?? [];
+          const scope = { now, ids: accountIds(context), plants: new Map(known.histories.map(history => [history.plantId, history.metrics])),
+            days: new Map(known.plants.map(plant => [plant.id, dates])) };
           const overviews = garden.overviews.map(overview => ({ ...overview,
             blocks: publishable(overview.blocks, { ...scope, own: overview.plantId, max: 3 }) }));
           const blocks = publishable(garden.blocks ?? [], { ...scope, max: 2 });
-          const layout = trail(garden.layout, overviews);
+          const layout = trail(garden.layout, overviews, Boolean(known.forecast));
           next.gardens.set(garden.gardenId, { fingerprint: gardenFingerprint(known),
             insights: { gardenId: garden.gardenId, status: "ready", generatedAt: new Date(generatedAt).toISOString(),
               overviews, items: garden.items.map(item => ({ ...item, id: crypto.randomUUID() })),

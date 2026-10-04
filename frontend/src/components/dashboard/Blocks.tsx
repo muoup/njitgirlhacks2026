@@ -1,8 +1,9 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { Reading } from "@/lib/api";
+import type { Forecast, Reading } from "@/lib/api";
 import { formatMeasurement, formatNumber, spanInWords } from "@/lib/format";
+import { DayLine } from "./forecast";
 import { LineChart } from "./LineChart";
 import { useMetrics } from "./metrics";
 import type { OverviewBlock } from "./overview";
@@ -183,13 +184,20 @@ export function isWide(block: OverviewBlock) {
  * come from the plant's readings and the scales from the metric catalogue. `subject` names
  * the plant above the block, for places that are not already about it.
  */
-export function BlockView({ block, plantId, reading, subject }: {
+export function BlockView({ block, plantId, reading, subject, forecast }: {
   block: OverviewBlock;
   plantId: string;
   /** The plant's latest reading, for the blocks that show where it stands now. */
   reading: Reading | undefined;
   subject?: string;
+  /** The garden's forecast, for a block about one of its days. */
+  forecast?: Forecast;
 }) {
+  if (block.type === "weather") {
+    // A day that has passed, or a garden that no longer has a forecast, leaves nothing to draw.
+    const day = forecast?.days.find(item => item.date === block.date);
+    return day ? <DayLine day={day} /> : null;
+  }
   const drawn =
     block.type === "readings" ? <ReadingsBlock reading={reading} />
     : block.type === "chart" ? <ChartBlock plantId={plantId} block={block} />

@@ -71,7 +71,8 @@ The server caches validated account-wide generations in memory and, with databas
 storage, saves them in `grove.agent_accounts`. Generated plant overviews contain
 urgency, headline, text, evidence windows, and up to three blocks from the kit in
 `src/agent/blocks.ts`: `readings`, `chart` (with up to two marked moments),
-`meter`, `stat` and `steps`. A block only chooses what to show; the page takes
+`meter`, `stat`, `steps` and `weather` (one day of the garden's forecast, by its
+date). A block only chooses what to show; the page takes
 every value from the plant's readings and every scale and healthy range from the
 metric catalogue (`GET /api/v1/metrics`, also in the dashboard response). A garden
 may carry up to two blocks of its own, each naming a plant, and a `layout`: the
@@ -89,7 +90,8 @@ failure fails the refresh and keeps the previous insights. Blocks and layouts
 are held to a different rule: the model writes them in a flat, loosely bounded
 shape, and one that cannot be drawn (an unknown plant, a metric the plant has not
 reported, a mark outside the chart, a step that is not plain words) is dropped on
-its own. A layout is published only if every plant has exactly one place and the
+its own, as is a weather block for a day that is not in the garden's forecast. A
+layout is published only if every plant has exactly one place and the
 plants that call for someone lead it, each as its own stop; otherwise the page
 orders the stops itself, as it does when plants have changed since. Readings reach the
 model already calibrated, with the metric catalogue from `src/metrics.ts`.
@@ -117,3 +119,27 @@ Google Application Default Credentials is needed to exercise Gemini. The harness
 uses the project-scoped Vertex AI provider, not the AI Studio Developer API.
 Server configuration fixes gemini-3.8-flash with medium thinking. Setup and a
 manual access check are documented in [VERTEX_SETUP.md](VERTEX_SETUP.md).
+
+## Weather
+
+A garden may say where it is (`PATCH /api/v1/gardens/:id` with a `location` found
+through `GET /api/v1/places?query=`) and whether it stands `indoors` or `outdoors`.
+A garden with a location gets a seven-day `forecast` in its dashboard response
+and in the agent's context: sky, high and low in °C, rain in mm and its chance,
+hours of sunshine, the strongest gust, and `alerts` for the lines a day crosses
+(`src/weather.ts`: frost, heat, rain, downpour, storm, wind, dull). The lines are
+fixed in code, so a warning never rests on the model's reading of the numbers.
+
+A scheduled run mentions the forecast only as a warning: when a day's alert
+matters to a plant in its garden's setting it adds a sentence, raises ok to watch
+at most, and may attach that day's `weather` block. A garden with a forecast
+always has one `weather` stop in its layout, just ahead of the garden's notes
+when the model gives it no place. Chat has the same forecast and may talk about
+it freely, but draws none of it.
+
+Forecasts and town search come from Open-Meteo, which needs no key. The only
+thing sent there is the town's coordinates, kept to two decimal places. A
+forecast is kept for an hour, and a garden simply has none when the service
+cannot be reached. A forecast that fails is not asked for again for five
+minutes, since the dashboard fetches its data every 15 seconds. Open-Meteo's data is CC BY 4.0 and its free service is for
+non-commercial use; the weather stop credits it.

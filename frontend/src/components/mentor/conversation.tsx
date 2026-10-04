@@ -27,7 +27,6 @@ interface MentorChat {
   clear: () => void;
   ask: (question: string) => void;
   decide: (id: string, decision: "approve" | "cancel") => void;
-  refresh: () => void;
   /** Whether the sidebar is out, on the pages that have one. */
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -151,24 +150,10 @@ export function MentorProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  function refresh() {
-    if (sending.current) return;
-    const during = conversation.current;
-    sending.current = true;
-    run(during, "refresh", async () => {
-      try {
-        await api.refreshInsights();
-        if (during !== conversation.current) return;
-        notifyDataChanged();
-        setThread(current => [...current, { from: persona, text: "Garden insights were refreshed." }]);
-      } catch (error) { if (during === conversation.current) throw error; }
-    });
-  }
-
   return (
     <Context
       value={{
-        persona, thread, draft, setDraft, busy, task, activity, error, change, ask, decide, refresh, open, setOpen,
+        persona, thread, draft, setDraft, busy, task, activity, error, change, ask, decide, open, setOpen,
         started: thread.some(message => message.from === "you"),
         clear: () => startAgain(persona),
       }}

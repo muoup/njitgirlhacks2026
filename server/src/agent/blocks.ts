@@ -6,6 +6,7 @@ import { proseProblems } from "./writing";
 const Id = t.String({ minLength: 1, maxLength: 200 });
 const Range = t.Union([t.Literal("24h"), t.Literal("7d")]);
 const Metric = t.String({ minLength: 1, maxLength: 100 });
+const Day = t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
 const Mark = t.Object({ at: t.String({ format: "date-time" }), label: t.String({ minLength: 1, maxLength: 200 }) });
 
 /**
@@ -23,6 +24,8 @@ export const Block = t.Union([
     description: "The latest value and how far it moved over the range." }),
   t.Object({ type: t.Literal("steps"), items: t.Array(t.String({ maxLength: 200 }), { minItems: 1, maxItems: 3 }) }, {
     description: "What to do, as short steps." }),
+  t.Object({ type: t.Literal("weather"), plantId: t.Optional(Id), date: Day }, {
+    description: "One day of the garden's forecast, by its date." }),
 ]);
 
 /**
@@ -33,13 +36,14 @@ export const Block = t.Union([
  * bounded as well, and `publishable` cuts them to size anyway.
  */
 export const GeneratedBlock = t.Object({
-  type: t.Union([t.Literal("readings"), t.Literal("chart"), t.Literal("meter"), t.Literal("stat"), t.Literal("steps")]),
+  type: t.Union([t.Literal("readings"), t.Literal("chart"), t.Literal("meter"), t.Literal("stat"), t.Literal("steps"), t.Literal("weather")]),
   plantId: t.Optional(Id),
   metric: t.Optional(t.String({ minLength: 1, maxLength: 100,
     description: "A catalogue metric identifier the plant has reported. Required for meter and stat, and for a chart with marks." })),
   range: t.Optional(t.Union([t.Literal("24h"), t.Literal("7d")], { description: "Required for chart and stat." })),
   marks: t.Optional(t.Array(Mark, { description: "chart only: at most two." })),
   items: t.Optional(t.Array(t.String({ maxLength: 600 }), { description: "steps only: one to three." })),
+  date: t.Optional(t.String({ maxLength: 40, description: "weather only: the date of one day in the garden's forecast." })),
 });
 export type BlockData = Static<typeof Block>;
 export type GeneratedBlockData = Static<typeof GeneratedBlock>;
@@ -72,13 +76,15 @@ export interface BlockScope {
   now: number;
   /** The account's IDs, none of which belong in a label or a step. */
   ids: string[];
+  /** The dates in the forecast for each plant's garden. A plant without one can show no weather. */
+  days?: Map<string, string[]>;
 }
 
 /**
  * The blocks that can be drawn, in the order given. One that names an unknown plant or a
  * metric the plant has not reported is dropped on its own rather than failing the run; so is
- * a mark outside the chart or a step that is not plain words. A meter or stat that names no
- * metric is about the reading furthest from healthy.
+ * a mark outside the chart, a step that is not plain words, or a day that is not in the
+ * garden's forecast. A meter or stat that names no metric is about the reading furthest from healthy.
  */
 export function publishable(generated: GeneratedBlockData[], scope: BlockScope): BlockData[] {
   const blocks: BlockData[] = [];
@@ -89,6 +95,13 @@ export function publishable(generated: GeneratedBlockData[], scope: BlockScope):
     if (block.type === "steps") {
       const items = (block.items ?? []).map(item => item.trim()).filter(item => plain(item, LIMITS.step)).slice(0, 3);
       if (items.length) published = { type: "steps", items };
+    } else if (block.type === "weather") {
+      // About a plant's garden, so it needs the plant but none of its readings.
+      const plantId = block.plantId ?? scope.own;
+      if (!plantId || !scope.plants.has(plantId) || (scope.own !== undefined && plantId !== scope.own)) continue;
+      if (block.date && scope.days?.get(plantId)?.includes(block.date)) {
+        published = { type: "weather", ...(scope.own === undefined ? { plantId } : {}), date: block.date };
+      }
     } else {
       const plantId = block.plantId ?? scope.own;
       const history = plantId === undefined ? undefined : scope.plants.get(plantId);
@@ -130,6 +143,7 @@ export function publishable(generated: GeneratedBlockData[], scope: BlockScope):
 /** A line for the conversation's history, so the mentor knows what it has already shown. */
 export function describeBlock(block: BlockData, plantName: (plantId: string) => string) {
   if (block.type === "steps") return `steps: ${block.items.join("; ")}`;
+  if (block.type === "weather") return `the forecast for one day at ${block.plantId ? plantName(block.plantId) : "the plant"}'s garden`;
   const metric = "metric" in block && block.metric ? ` of ${metricCatalogue.find(info => info.metric === block.metric)?.label ?? block.metric}` : "";
   return `${block.type}${metric} for ${block.plantId ? plantName(block.plantId) : "the plant"}${"range" in block ? ` over ${block.range}` : ""}`;
 }

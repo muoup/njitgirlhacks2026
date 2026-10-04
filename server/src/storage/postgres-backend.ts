@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import type { BackendAdapter, BackendIdentity, InsightSnapshot } from "../backend";
-import type { ApiKeyResult, DashboardData, GardensData, GardenResult, InsightsData, InsightsResult,
+import type { ApiKeyResult, DashboardData, GardenData, GardenEditData, GardensData, GardenResult, InsightsData, InsightsResult,
   PlantEditData, PlantedResult, PlantResult, ReadingData, ReadingRange, ReadingsData } from "../schemas";
 import type { MemoryData, MemoryWriteData, MutationData } from "../agent/schemas";
 import { ApiError } from "../errors";
@@ -9,14 +9,17 @@ import { DeviceKeys, hashKey } from "./keys";
 import { transaction } from "./database";
 import { DomainService } from "../domain";
 import { calibrate, metricCatalogue } from "../metrics";
+import { coarse } from "../weather";
 
 const iso = (value: Date | string) => new Date(value).toISOString();
 const notFound = () => new ApiError(404, "NOT_FOUND", "Resource not found.");
 const invalidKey = () => new ApiError(401, "INVALID_DEVICE_KEY", "A valid plant API key is required.");
-const gardenSelect = `SELECT g.id, g.name,
+const gardenSelect = `SELECT g.id, g.name, g.setting, g.place, g.latitude, g.longitude,
   (SELECT count(*)::int FROM grove.plants p WHERE p.garden_id=g.id) AS "plantCount",
   (SELECT count(*)::int FROM grove.devices d JOIN grove.plants p ON p.id=d.plant_id WHERE p.garden_id=g.id) AS "deviceCount"
   FROM grove.gardens g`;
+const garden = (row: any): GardenData => ({ id: row.id, name: row.name, plantCount: row.plantCount, deviceCount: row.deviceCount,
+  setting: row.setting, ...(row.place ? { location: { name: row.place, latitude: row.latitude, longitude: row.longitude } } : {}) });
 const reading = (row: any): ReadingData => calibrate({ plantId: row.plant_id, deviceId: row.device_id,
   measuredAt: iso(row.measured_at), measurements: row.measurements, ...(row.color ? { color: row.color } : {}) });
 
@@ -39,15 +42,15 @@ export class PostgresBackend implements BackendAdapter {
       ON CONFLICT(account_id) DO UPDATE SET last_seen_at=now()`, [identity.accountId]);
   }
   async listGardens(identity: BackendIdentity): Promise<GardensData> {
-    return { gardens: (await this.pool.query(`${gardenSelect} WHERE g.account_id=$1 ORDER BY g.created_at,g.id`, [identity.accountId])).rows, meta: this.meta() };
+    return { gardens: (await this.pool.query(`${gardenSelect} WHERE g.account_id=$1 ORDER BY g.created_at,g.id`, [identity.accountId])).rows.map(garden), meta: this.meta() };
   }
   async hasPlant(identity: BackendIdentity, plantId: string) {
     return Boolean((await this.pool.query(`SELECT 1 FROM grove.plants p JOIN grove.gardens g ON g.id=p.garden_id
       WHERE p.id=$1 AND g.account_id=$2`, [plantId, identity.accountId])).rowCount);
   }
   async hydrateDashboard(identity: BackendIdentity, gardenId: string): Promise<DashboardData | null> {
-    const garden = (await this.pool.query(`${gardenSelect} WHERE g.id=$1 AND g.account_id=$2`, [gardenId, identity.accountId])).rows[0];
-    if (!garden) return null;
+    const row = (await this.pool.query(`${gardenSelect} WHERE g.id=$1 AND g.account_id=$2`, [gardenId, identity.accountId])).rows[0];
+    if (!row) return null;
     const plants = (await this.pool.query(`SELECT p.id,p.garden_id AS "gardenId",p.name,p.species FROM grove.plants p
       JOIN grove.gardens g ON g.id=p.garden_id WHERE g.id=$1 AND g.account_id=$2 ORDER BY p.created_at,p.id`, [gardenId, identity.accountId])).rows;
     const devices = (await this.pool.query(`SELECT d.id,p.garden_id AS "gardenId",d.name,d.last_seen_at FROM grove.devices d
@@ -59,7 +62,7 @@ export class PostgresBackend implements BackendAdapter {
       WHERE g.id=$1 AND g.account_id=$2 ORDER BY p.id`, [gardenId, identity.accountId])).rows.map(reading);
     const insights = (await this.getInsights(identity, gardenId))?.insights;
     if (!insights) return null; // Concurrent deletion.
-    return { garden, plants, devices, latestReadings, insights, metrics: metricCatalogue, meta: this.meta() };
+    return { garden: garden(row), plants, devices, latestReadings, insights, metrics: metricCatalogue, meta: this.meta() };
   }
   async getReadings(identity: BackendIdentity, plantId: string, range: ReadingRange): Promise<ReadingsData | null> {
     if (!await this.hasPlant(identity, plantId)) return null;
@@ -118,6 +121,24 @@ export class PostgresBackend implements BackendAdapter {
       ON CONFLICT(plant_id) DO UPDATE SET key_hash=$2,encrypted_key=$3,created_at=now() RETURNING created_at`,
       [plantId, issued.hash, issued.encrypted])).rows[0];
     return { apiKey: { key: issued.key, createdAt: iso(row.created_at) } };
+  }
+  async updateGarden(identity: BackendIdentity, gardenId: string, edit: GardenEditData): Promise<GardenResult> {
+    return transaction(this.pool, async client => {
+      await this.lock(client, identity.accountId);
+      const before = (await client.query("SELECT * FROM grove.gardens WHERE id=$1 AND account_id=$2", [gardenId, identity.accountId])).rows[0];
+      if (!before) throw notFound();
+      // A location left out keeps what the garden has; null forgets it.
+      const location = edit.location === undefined
+        ? { name: before.place, latitude: before.latitude, longitude: before.longitude }
+        : edit.location ? coarse({ ...edit.location, name: edit.location.name.trim() }) : { name: null, latitude: null, longitude: null };
+      const next = [edit.name?.trim() ?? before.name, edit.setting ?? before.setting, location.name, location.latitude, location.longitude];
+      await client.query("UPDATE grove.gardens SET name=$2, setting=$3, place=$4, latitude=$5, longitude=$6 WHERE id=$1", [gardenId, ...next]);
+      // Generated notes may rest on the old name, setting or forecast.
+      if (JSON.stringify(next) !== JSON.stringify([before.name, before.setting, before.place, before.latitude, before.longitude])) {
+        await this.dirty(client, identity.accountId);
+      }
+      return { garden: garden((await client.query(`${gardenSelect} WHERE g.id=$1`, [gardenId])).rows[0]) };
+    });
   }
   async updatePlant(identity: BackendIdentity, plantId: string, edit: PlantEditData): Promise<PlantResult> {
     return transaction(this.pool, async client => {
@@ -184,7 +205,7 @@ export class PostgresBackend implements BackendAdapter {
         if ((await client.query("SELECT count(*)::int AS count FROM grove.gardens WHERE account_id=$1", [identity.accountId])).rows[0].count >= 20) {
           throw new ApiError(429, "GARDEN_LIMIT", "At most 20 gardens are supported per account.");
         }
-        const row = (await client.query("INSERT INTO grove.gardens(id,account_id,name) VALUES($1,$2,$3) RETURNING id,name",
+        const row = (await client.query("INSERT INTO grove.gardens(id,account_id,name) VALUES($1,$2,$3) RETURNING id,name,setting",
           [crypto.randomUUID(), identity.accountId, action.name.trim()])).rows[0];
         result = { garden: { ...row, plantCount: 0, deviceCount: 0 } };
       } else if (action.kind === "removePlant") {

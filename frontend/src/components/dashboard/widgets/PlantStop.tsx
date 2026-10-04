@@ -79,7 +79,7 @@ export function PlantStop({
     </Button>
   );
   const draw = (shown: OverviewBlock[]) =>
-    shown.map((block, index) => <BlockView key={index} block={block} plantId={plant.id} reading={reading} />);
+    shown.map((block, index) => <BlockView key={index} block={block} plantId={plant.id} reading={reading} forecast={view.dashboard.forecast} />);
   // A chart fills its side of the board, so the steps go under the note. Without one, that side
   // would be left mostly bare: the steps go there instead, and what it holds is set at mid-height.
   const charted = blocks.some(block => block.type === "chart");

@@ -18,7 +18,7 @@ export interface Mentor {
 export const MENTORS: Record<Persona, Mentor> = {
   gnome: {
     label: "Gnome",
-    name: "Burdock the gnome",
+    name: "Burdock the Gnome",
     manner: "Blunt, short and fond of dirt.",
     color: "#d2553a",
     greeting: "Oi. Mind the seedlings. What's the trouble with your patch, then?",
@@ -26,7 +26,7 @@ export const MENTORS: Record<Persona, Mentor> = {
   },
   wizard: {
     label: "Wizard",
-    name: "Moss the wizard",
+    name: "Moss the Wizard",
     manner: "Grand, patient and given to omens.",
     color: "#6d70c4",
     greeting: "Ah, a visitor. Ask, and I shall consult the leaves on your behalf.",

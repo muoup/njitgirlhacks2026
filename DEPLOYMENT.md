@@ -57,11 +57,35 @@ disappear on restart. The usual demo account is seeded unless
 
 Plain `./prod.sh` keeps the real-storage checks and disables demo seeding.
 
-The frontend listens on port 3000 by default; the BFF uses `server/.env`'s `PORT`
-(default 3001). Override them independently if needed:
+The frontend listens on port 80, the standard HTTP port, so its address needs no
+port; the BFF uses `server/.env`'s `PORT` (default 3001). Linux refuses ports
+below 1024 to ordinary users, so allow the Bun binary to bind them, once and
+again after each Bun upgrade:
 
 ```bash
-FRONTEND_PORT=8080 BFF_PORT=8081 ./prod.sh --demo
+sudo setcap cap_net_bind_service=+ep "$(readlink -f "$(command -v bun)")"
+```
+
+The launcher checks the port before starting anything and prints that command
+when it is refused. Without a reverse proxy the settings then read as follows,
+the frontend's origin carrying no port:
+
+```dotenv
+# frontend/.env
+BUN_PUBLIC_API_URL=http://YOUR_VM_ADDRESS:3001
+```
+
+```dotenv
+# server/.env
+BETTER_AUTH_URL=http://YOUR_VM_ADDRESS:3001
+FRONTEND_ORIGINS=http://YOUR_VM_ADDRESS
+```
+
+Ports 80 and 3001 must be open in the VM's firewall. Override either port if
+needed, for instance behind a reverse proxy that takes port 80 itself:
+
+```bash
+FRONTEND_PORT=3000 BFF_PORT=8081 ./prod.sh --demo
 ```
 
 Both services run without hot reload. The frontend's existing Bun HTML server

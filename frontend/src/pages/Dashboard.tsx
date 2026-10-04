@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { AccountTag, GardenSign, SideBoard, TitleSign, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
+import { isWarning } from "@/components/dashboard/forecast";
 import { layoutFor, type WidgetSpec } from "@/components/dashboard/layout";
 import { MetricCatalogue } from "@/components/dashboard/metrics";
 import { type PlantOverview, standInOverviews, URGENCY, type Urgency } from "@/components/dashboard/overview";
@@ -14,6 +15,7 @@ import { type DashboardView, lastHeardAt } from "@/components/dashboard/view";
 import { Widget } from "@/components/dashboard/Widget";
 import { api, ApiError, type DashboardResponse, type Garden, type MetricInfo } from "@/lib/api";
 import { auth, type SessionUser } from "@/lib/auth";
+import { useDataRefresh } from "@/lib/data-events";
 import { timeAgo } from "@/lib/format";
 import { useResource } from "@/lib/useResource";
 
@@ -37,7 +39,9 @@ function LoadingBody() {
 }
 
 /** The stone marking a stop takes the colour of the plant the stop is about. */
-function stopColor(spec: WidgetSpec, overviews: PlantOverview[]) {
+function stopColor(spec: WidgetSpec, overviews: PlantOverview[], dashboard: DashboardResponse) {
+  // The forecast's stone lights up when the next three days hold weather to be ready for.
+  if (spec.type === "weather") return dashboard.forecast?.days.slice(0, 3).some(day => day.alerts.some(isWarning)) ? URGENCY.watch.color : undefined;
   if (spec.type !== "plant") return undefined;
   const urgency = overviews.find(overview => overview.plantId === spec.plantId)?.urgency;
   return urgency ? URGENCY[urgency].color : undefined;
@@ -71,7 +75,7 @@ function GardenBody({ view }: { view: DashboardView }) {
       <Trail
         stops={layoutFor(dashboard, overviews, selectedId).map((spec, index) => ({
           key: `${spec.type}-${index}`,
-          color: stopColor(spec, overviews),
+          color: stopColor(spec, overviews, dashboard),
           node: <Widget spec={spec} index={index} view={view} />,
         }))}
       />
@@ -119,12 +123,15 @@ function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overv
 }
 
 const NO_METRICS: MetricInfo[] = [];
+// How often the page fetches its readings and charts again while it is open.
+const REFRESH_EVERY = 15_000;
 
 function SignedIn({ user }: { user: SessionUser }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const gardenParam = params.get("garden");
   const plantId = params.get("plant");
+  useDataRefresh(REFRESH_EVERY);
 
   const gardens = useResource(() => api.listGardens(), []);
   const gardenList: Garden[] = gardens.resource.status === "ready" ? gardens.resource.data.gardens : [];
@@ -240,7 +247,17 @@ export function DashboardSign({ gardens, gardenId, onSelect, children }: {
 /** Signed-in home: the grove band for one garden, then whatever widgets the layout lists, along a trail. */
 export function Dashboard() {
   const session = auth.useSession();
-  if (session.status === "loading") return <div role="status" aria-label="Loading" className="min-h-svh bg-background" />;
+  if (session.status === "loading") {
+    // The grove is already standing while the session is looked up, so the page does not start blank.
+    return (
+      <div role="status" aria-label="Loading" className="min-h-svh bg-background">
+        <div className="relative">
+          <GroveBand plants={[]} overviews={[]} readings={[]} selectedId={null} onSelect={() => {}} />
+          <Wordmark to="/" />
+        </div>
+      </div>
+    );
+  }
   if (session.status === "signed-out") return <Navigate to="/signin" replace />;
   return <SignedIn user={session.user} />;
 }

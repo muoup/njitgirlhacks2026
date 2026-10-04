@@ -39,6 +39,8 @@ export function createBffApi(baseUrl: string): GroveApi {
       request(`${plant(plantId)}/readings?${new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })}`),
 
     createGarden: name => request("/gardens", "POST", { name }),
+    updateGarden: (gardenId, gardenEdit) => request(garden(gardenId), "PATCH", gardenEdit),
+    searchPlaces: query => request(`/places?${new URLSearchParams({ query })}`),
     removeGarden: gardenId => request(garden(gardenId), "DELETE"),
     createPlant: (gardenId, newPlant) => request(`${garden(gardenId)}/plants`, "POST", newPlant),
     updatePlant: (plantId, edit) => request(plant(plantId), "PATCH", edit),

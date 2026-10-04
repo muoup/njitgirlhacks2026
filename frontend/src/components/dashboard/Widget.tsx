@@ -4,6 +4,7 @@ import { CalmPlants } from "./widgets/CalmPlants";
 import { GardenNotes } from "./widgets/GardenNotes";
 import { History } from "./widgets/History";
 import { PlantStop } from "./widgets/PlantStop";
+import { Weather } from "./widgets/Weather";
 
 /** Draws one entry of a layout. Every kind of widget the dashboard knows is listed here. */
 export function Widget({ spec, index, view }: { spec: WidgetSpec; index: number; view: DashboardView }) {
@@ -16,6 +17,8 @@ export function Widget({ spec, index, view }: { spec: WidgetSpec; index: number;
       return <CalmPlants plantIds={spec.plantIds} view={view} />;
     case "garden-notes":
       return <GardenNotes view={view} />;
+    case "weather":
+      return view.dashboard.forecast ? <Weather forecast={view.dashboard.forecast} garden={view.dashboard.garden} cut={index} /> : null;
     case "history":
       return <History plantId={spec.plantId} metrics={spec.metrics} cut={index} />;
   }
