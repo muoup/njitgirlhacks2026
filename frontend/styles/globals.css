@@ -113,6 +113,11 @@
   --grove-leaf-hi: #5c4829;
   --grove-clearing: #122719;
   --grove-clearing-hi: #152c1d;
+  /* The trail across it: bare earth, paler where it is trodden, and its stepping stones. */
+  --grove-earth: #282216;
+  --grove-earth-hi: #332a1a;
+  --grove-stone: #4a584f;
+  --grove-stone-hi: #647268;
   --grove-ember: #e3ab76;
   --grove-ember-hi: #f6dcae;
   --grove-parchment: #f3ead2;
