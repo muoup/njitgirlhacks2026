@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+    <div style="text-align: center">
+      <h1>Upload File</h1>
+      <form enctype="multipart/form-data" method="post">
+        {% csrf token %}
+        {% for field in form %}
+          <div style="margin-bottom: 10px">
+            {{ field.label_tag }}
+            {{ field }}
+               {% if field.help_text %}
+              <span class="question-mark" title="{{ field.help_text }}"></span>&#63;<span></span>
+            {% endif %}
+          </div>
+          <input type="submit" value="Save"></input>
+      </form>
+    </div>
+
+</body>
+</html>
