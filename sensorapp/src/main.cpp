@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SPL07-003.h>
 #include <Air_Quality_Sensor.h>
-
+#include "../lib/Grove_I2C_Color_Sensor_TCS3472/Adafruit_TCS34725.h"
 /**
  * Parameters for soil sensor
  */
@@ -38,8 +38,14 @@ AirQualitySensor aqs(A1);
 // Create SPL07-003 sensor instance
 SPL07_003 spl;
 
+/**
+ * Parameters for colour sensor
+ */
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+
 bool aqsStatus = false;
 bool barometerStatus = false;
+bool tcsStatus = false;
 
 void setup() {
     // write your initialization code here
@@ -55,6 +61,14 @@ void setup() {
     digitalWrite(GREEN_LED, LOW);
     digitalWrite(YELLOW_LED, LOW);
     digitalWrite(RED_LED, LOW);
+
+    // Init colour sensor
+    if (tcs.begin()) {
+        tcsStatus = true;
+    } else {
+        tcsStatus = false;
+        Serial.println("Error initializing TCS34725 :(");
+    }
 
     // Init air quality sensor
     if (aqs.init()) {
@@ -146,7 +160,30 @@ void loop() {
             Serial.print(" C, Altitude: ");
             Serial.print(altitude, 3);
             Serial.println(" m");
+
+            // Poll colour sensor
+            uint16_t clear, red, green, blue;
+            tcs.setInterrupt(false);      // turn on LED
+            delay(60);  // takes 50ms to read
+            tcs.getRawData(&red, &green, &blue, &clear);
+            tcs.setInterrupt(true);  // turn off LED
+            Serial.print("C:\t"); Serial.print(clear);
+            Serial.print("\tR:\t"); Serial.print(red);
+            Serial.print("\tG:\t"); Serial.print(green);
+            Serial.print("\tB:\t"); Serial.print(blue);
+
+            // Convert RGB values to hex
+            uint32_t sum = clear;
+            float r, g, b;
+            r = red; r /= sum;
+            g = green; g /= sum;
+            b = blue; b /= sum;
+            r *= 256; g *= 256; b *= 256;
+            Serial.print("\t");
+            Serial.print((int)r, HEX); Serial.print((int)g, HEX); Serial.print((int)b, HEX);
+            Serial.println();
         }//if
         intervalTimer = millis();
+
     }
 }
