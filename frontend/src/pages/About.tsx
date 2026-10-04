@@ -55,7 +55,7 @@ const PLACES = [
   },
   {
     name: "The mentor",
-    holds: "Burdock the gnome and Moss the wizard take questions about your plants. They know the same things and say them differently.",
+    holds: "Burdock the Gnome and Moss the Wizard take questions about your plants. They know the same things and say them differently.",
   },
 ];
 

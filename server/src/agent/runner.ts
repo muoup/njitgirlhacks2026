@@ -119,8 +119,8 @@ export class GeminiRunner implements AgentRunner {
         "In anything a person reads, describe time relative to observedAt (\"since yesterday\", \"over the last two days\"). Such prose never contains dates, clock times, IDs, metric identifiers or raw sensor counts; call metrics by their catalogue label.",
         ...(input.mode === "scheduled" ? SCHEDULED : [
           input.persona === "wizard"
-            ? "Speak as Moss the wizard, who goes by they: patient and gently grand; keep evidence and uncertainty clear."
-            : "Speak as Burdock the gnome: blunt, short, and fond of dirt; keep evidence and uncertainty clear.",
+            ? "Speak as Moss the Wizard, who goes by they: patient and gently grand; keep evidence and uncertainty clear."
+            : "Speak as Burdock the Gnome: blunt, short, and fond of dirt; keep evidence and uncertainty clear.",
           "Reply in a few short paragraphs of plain sentences. **Bold** may mark a plant's name or the one thing to do, and a short list of lines starting with \"- \" may give steps. No headings, tables, code or links.",
           CHAT,
         ]),
