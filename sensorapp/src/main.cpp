@@ -50,9 +50,10 @@ Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS3472
 /**
  * Parameters for wireless module
  */
-IPAddress serverIP(20,121,136,26);\
+//IPAddress serverIP(20,121,136,26);
+char server[] = "loamgnome.garden";
 int port = 3001;
-WiFiSSLClient client;
+WiFiClient client;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 
@@ -186,12 +187,49 @@ void setup() {
 
     // Connect to webserver
     Serial.print("\nStarting connection to server ");
-    Serial.println(serverIP);
+    Serial.println(server);
     // if you get a connection, report back via serial:
 
-    if (client.connect(serverIP, 4500)) {
+    if (client.connect(server, port)) {
         Serial.println("connected to server");
+    } else {
+        Serial.println("Initial connection check failed (will retry in loop)");
     }
+}
+
+/* just wrap the received data up to 80 columns in the serial print*/
+/* -------------------------------------------------------------------------- */
+void read_response() {
+    /* -------------------------------------------------------------------------- */
+    unsigned long timeout = millis();
+    while (client.connected() && !client.available()) {
+        if (millis() - timeout > 5000) {
+            Serial.println(">>> Client Timeout !");
+            client.stop();
+            return;
+        }
+        delay(10);
+    }
+
+    uint32_t received_data_num = 0;
+    while (client.connected() || client.available()) {
+        if (client.available()) {
+            /* actual data reception */
+            char c = client.read();
+            /* print data to serial port */
+            Serial.print(c);
+            /* wrap data to 80 columns*/
+            received_data_num++;
+            if (received_data_num % 80 == 0) {
+                Serial.println();
+            }
+            timeout = millis();
+        } else if (millis() - timeout > 2000) {
+            break;
+        }
+    }
+    Serial.println();
+    client.stop();
 }
 
 // Tracks how often loops are called
@@ -199,7 +237,7 @@ unsigned long intervalTimer = 0;
 
 void loop() {
     // write your code here
-    if (millis() - intervalTimer > 1000) {
+    if (millis() - intervalTimer > 15000) {
         /**
          * Poll soil sensor
          */
@@ -228,16 +266,16 @@ void loop() {
         // Poll AQS
         int quality = aqs.getValue();
 
-        Serial.print("AQ sensor value: ");
-        Serial.println(aqs.getValue());
+        Serial.print("AQS\t");
+        Serial.print(aqs.getValue());
         if (quality >= AQS_AIR_LOW) {
-            Serial.println("Not enough CO2");
+            Serial.println("\tCO2 LOW");
         } else if (quality >= AQS_AIR_GOOD) {
-            Serial.println("CO2 output good");
+            Serial.println("\tCO2 OK");
         } else if (quality >= AQS_AIR_HIGH) {
-            Serial.println("Excess CO2!");
+            Serial.println("\tCO2 HI");
         } else {
-            Serial.println("AQ sensor reading invalid");
+            Serial.println("\tINOP");
         }
 
         // Poll light sensor
@@ -288,7 +326,7 @@ void loop() {
         Serial.println();
 
         // Make a HTTP request
-        String requestBody = "{\n\"sampleId\": \""
+        String requestBody = R"({"sampleId": ")"
         + String(BEARER_TOKEN).substring(48, 56)
         + String(timeClient.getDay())
         + String(timeClient.getHours())
@@ -305,17 +343,25 @@ void loop() {
                                         String(static_cast<int>(g), HEX) +
                                             String(static_cast<int>(b), HEX) + R"("})";
         Serial.println(requestBody);
-        client.println("POST /api/v1/ingest/readings HTTP/1.1");
-        client.print("Authorization: ");
-        client.println(BEARER_TOKEN);
-        client.print("Host: ");
-        client.println(serverIP);
-        client.println("Connection: keep-alive");
-        client.println("Content-type: application/json");
-        client.print("Content-length: ");
-        client.println(requestBody.length());
-        client.println();
-        client.println(requestBody);
+
+        if (client.connect(server, port)) {
+            client.println("POST /api/v1/ingest/readings HTTP/1.1");
+            client.print("Authorization: Bearer ");
+            client.println(BEARER_TOKEN);
+            client.print("Host: ");
+            client.println(server);
+            client.println("Connection: close");
+            client.println("Content-type: application/json");
+            client.print("Content-length: ");
+            client.println(requestBody.length());
+            client.println();
+            client.println(requestBody);
+
+            // Await and print response
+            read_response();
+        } else {
+            Serial.println("Connection to server failed");
+        }
 
         intervalTimer = millis();
     }
