@@ -8,5 +8,6 @@
 #endif //SENSORAPP_ARDUINO_SECRETS_H
 
 //arduino_secrets.h header file
-#define SECRET_SSID "yournetwork"
-#define SECRET_PASS "yourpassword"
+#define SECRET_SSID "ssid"
+#define SECRET_PASS "pass"
+#define BEARER_TOKEN "token"
