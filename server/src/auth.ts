@@ -10,8 +10,8 @@ export const demoCredentials = {
 };
 
 export function createAuth(config: Config, database?: BetterAuthOptions["database"]) {
-  if (config.production && !database) {
-    throw new Error("Configure durable Better Auth storage before running in production.");
+  if (config.production && !config.allowDemoInProduction && !database) {
+    throw new Error("Configure durable Better Auth storage before running in production, or use ./prod.sh --demo for the ephemeral scaffold.");
   }
   return betterAuth({
     appName: "Grove",

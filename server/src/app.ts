@@ -52,8 +52,8 @@ export async function createApp(options: {
       throw new ApiError(404, "NOT_FOUND", "Plant not found.");
     }
   }
-  if (config.production && !options.backend) {
-    throw new Error("Configure the real backend adapter before running in production.");
+  if (config.production && !config.allowDemoInProduction && !options.backend) {
+    throw new Error("Configure the real backend adapter before running in production, or use ./prod.sh --demo for the ephemeral scaffold.");
   }
   const auth = createAuth(config, options.authDatabase);
   if (config.seedDemo && !options.authDatabase) await seedDemoAccount(auth);

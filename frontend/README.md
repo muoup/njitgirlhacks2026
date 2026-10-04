@@ -53,4 +53,9 @@ To run for production:
 bun start
 ```
 
+To launch both services on a VM, use `./prod.sh --demo` from the repo root for
+the current scaffold, or `./prod.sh` after durable BFF adapters are configured.
+See [deployment instructions](../DEPLOYMENT.md). The frontend's production HTML
+server automatically bundles and caches assets; `dist` is a separate static build.
+
 This project was created using `bun init` in bun v1.4.2. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
