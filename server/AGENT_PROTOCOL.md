@@ -140,5 +140,6 @@ it freely, but draws none of it.
 Forecasts and town search come from Open-Meteo, which needs no key. The only
 thing sent there is the town's coordinates, kept to two decimal places. A
 forecast is kept for an hour, and a garden simply has none when the service
-cannot be reached. Open-Meteo's data is CC BY 4.0 and its free service is for
+cannot be reached. A forecast that fails is not asked for again for five
+minutes, since the dashboard fetches its data every 15 seconds. Open-Meteo's data is CC BY 4.0 and its free service is for
 non-commercial use; the weather stop credits it.

@@ -1,6 +1,6 @@
 import type { Forecast, Garden } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { ALERTS, rainAmount, SkyIcon } from "../forecast";
+import { AlertFlag, rainAmount, SkyIcon } from "../forecast";
 import { Plaque } from "../Panel";
 
 const weekday = new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "UTC" });
@@ -10,11 +10,13 @@ const weekday = new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "UTC
  * the days that cross a line flagged. What it means for each plant is in that plant's note.
  */
 export function Weather({ forecast, garden, cut }: { forecast: Forecast; garden: Garden; cut?: number }) {
+  // "Miami, Florida, United States" is how the place was found; the town and its region are enough to head a forecast.
+  const town = forecast.place.split(", ").slice(0, 2).join(", ");
   return (
     <section>
       <h2 className="m-0 font-brush text-4xl leading-none font-normal text-grove-parchment">The week ahead</h2>
       <p className="mt-1.5 mb-0 text-sm text-muted-foreground">
-        {forecast.place} · {garden.setting === "outdoors" ? "an outdoor garden" : "an indoor garden"}
+        {town} · {garden.setting === "outdoors" ? "an outdoor garden" : "an indoor garden"}
       </p>
       <Plaque cut={cut} className="mt-5">
         <ol className="m-0 grid list-none divide-y divide-border/60 p-0 sm:grid-cols-7 sm:divide-x sm:divide-y-0">
@@ -32,18 +34,18 @@ export function Weather({ forecast, garden, cut }: { forecast: Forecast; garden:
                   <b>{day.high}°</b> <span className="text-muted-foreground">{day.low}°</span>
                 </span>
                 <span className="flex min-h-5 flex-1 flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground tabular-nums sm:flex-none sm:flex-col sm:items-center">
-                  {rain && <span className="text-foreground">{rain}</span>}
-                  {rain && <span>{day.rainChance}%</span>}
+                  {rain ? (
+                    <>
+                      <span className="text-foreground">{rain}</span>
+                      <span>{day.rainChance}%</span>
+                    </>
+                  ) : (
+                    "dry"
+                  )}
                 </span>
                 <span className="flex flex-wrap justify-end gap-1 sm:min-h-5 sm:justify-center">
                   {day.alerts.map(alert => (
-                    <span
-                      key={alert}
-                      className="rounded-full border px-1.5 text-[0.6875rem] leading-4 font-bold"
-                      style={{ color: ALERTS[alert].color, borderColor: ALERTS[alert].color }}
-                    >
-                      {ALERTS[alert].word}
-                    </span>
+                    <AlertFlag key={alert} alert={alert} />
                   ))}
                 </span>
               </li>

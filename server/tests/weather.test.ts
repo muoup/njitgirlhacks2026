@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { alertsFor, forecastFor, OpenMeteo } from "../src/weather";
+import { alertsFor, forecastFor, OpenMeteo, WeatherAway } from "../src/weather";
 
 // Shaped as Open-Meteo answers, with one day for each line a forecast can cross.
 const daily = {
@@ -54,6 +54,23 @@ describe("weather", () => {
     expect(calls).toHaveLength(2);
     now += 6 * 3_600_000;
     await expect(weather.forecast(miami)).rejects.toThrow("503");
+  });
+
+  test("a forecast that has just failed is left alone for a few minutes, and quietly", async () => {
+    let now = Date.parse("2026-10-04T12:00:00Z");
+    let up = false;
+    const { weather, calls } = source(() => now, () => up ? Response.json({ daily }) : new Response("", { status: 503 }));
+    await expect(weather.forecast(miami)).rejects.toThrow("503");
+    now += 60_000;
+    await expect(weather.forecast(miami)).rejects.toBeInstanceOf(WeatherAway);
+    const logged = console.error; let lines = 0; console.error = () => { lines += 1; };
+    try { expect(await forecastFor(weather, { location: miami })).toBeUndefined(); } finally { console.error = logged; }
+    expect(lines).toBe(0);
+    expect(calls).toHaveLength(1);
+    now += 5 * 60_000;
+    up = true;
+    expect((await weather.forecast(miami)).days).toHaveLength(7);
+    expect(calls).toHaveLength(2);
   });
 
   test("a garden without a location, or whose forecast fails, simply has none", async () => {

@@ -15,6 +15,7 @@ import { type DashboardView, lastHeardAt } from "@/components/dashboard/view";
 import { Widget } from "@/components/dashboard/Widget";
 import { api, ApiError, type DashboardResponse, type Garden, type MetricInfo } from "@/lib/api";
 import { auth, type SessionUser } from "@/lib/auth";
+import { useDataRefresh } from "@/lib/data-events";
 import { timeAgo } from "@/lib/format";
 import { useResource } from "@/lib/useResource";
 
@@ -122,12 +123,15 @@ function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overv
 }
 
 const NO_METRICS: MetricInfo[] = [];
+// How often the page fetches its readings and charts again while it is open.
+const REFRESH_EVERY = 15_000;
 
 function SignedIn({ user }: { user: SessionUser }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const gardenParam = params.get("garden");
   const plantId = params.get("plant");
+  useDataRefresh(REFRESH_EVERY);
 
   const gardens = useResource(() => api.listGardens(), []);
   const gardenList: Garden[] = gardens.resource.status === "ready" ? gardens.resource.data.gardens : [];
@@ -243,7 +247,17 @@ export function DashboardSign({ gardens, gardenId, onSelect, children }: {
 /** Signed-in home: the grove band for one garden, then whatever widgets the layout lists, along a trail. */
 export function Dashboard() {
   const session = auth.useSession();
-  if (session.status === "loading") return <div role="status" aria-label="Loading" className="min-h-svh bg-background" />;
+  if (session.status === "loading") {
+    // The grove is already standing while the session is looked up, so the page does not start blank.
+    return (
+      <div role="status" aria-label="Loading" className="min-h-svh bg-background">
+        <div className="relative">
+          <GroveBand plants={[]} overviews={[]} readings={[]} selectedId={null} onSelect={() => {}} />
+          <Wordmark to="/" />
+        </div>
+      </div>
+    );
+  }
   if (session.status === "signed-out") return <Navigate to="/signin" replace />;
   return <SignedIn user={session.user} />;
 }

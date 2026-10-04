@@ -16,9 +16,12 @@ const SKY: Record<ForecastDay["sky"], LucideIcon> = {
   Thunderstorm: CloudLightning,
 };
 
+const WET = new Set<ForecastDay["sky"]>(["Drizzle", "Rain", "Showers"]);
+
+/** The sky as a picture. A wet one is always in the colour of rain, whatever colour was asked for. */
 export function SkyIcon({ sky, className }: { sky: ForecastDay["sky"]; className?: string }) {
   const Icon = SKY[sky] ?? Cloud;
-  return <Icon aria-hidden="true" className={cn("size-6 shrink-0", className)} />;
+  return <Icon aria-hidden="true" className={cn("size-6 shrink-0", className, WET.has(sky) && "text-grove-rain")} />;
 }
 
 /** The word for each line a day can cross, and the colour it is flagged in. */
@@ -29,9 +32,20 @@ export const ALERTS: Record<Alert, { word: string; color: string }> = {
   storm: { word: "Storm", color: "var(--grove-watch)" },
   wind: { word: "Wind", color: "var(--grove-watch)" },
   // Rain is mostly good news for a garden, and a dull day only matters when several follow.
-  rain: { word: "Rain", color: "var(--grove-ok)" },
+  rain: { word: "Rain", color: "var(--grove-rain)" },
   dull: { word: "Dull", color: "var(--muted-foreground)" },
 };
+
+/** A flagged day: the alert's word behind a small stone of its colour, as the garden's tally is marked. */
+export function AlertFlag({ alert }: { alert: Alert }) {
+  const { word, color } = ALERTS[alert];
+  return (
+    <span className="inline-flex items-center gap-1 text-[0.6875rem] leading-4 font-bold" style={{ color }}>
+      <span aria-hidden="true" className="size-1.5 rotate-45 bg-current" />
+      {word}
+    </span>
+  );
+}
 
 /** Weather to be ready for, as against rain that saves a watering or one dull day. */
 export function isWarning(alert: Alert) {

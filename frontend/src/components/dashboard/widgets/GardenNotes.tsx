@@ -1,13 +1,50 @@
-import { Radio } from "lucide-react";
+import { Radio, RefreshCw } from "lucide-react";
 
 import type { CSSProperties } from "react";
 
+import { useAction } from "@/components/shed/action";
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
+import { notifyDataChanged } from "@/lib/data-events";
 import { timeAgo } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { BlockView, isWide } from "../Blocks";
 import { Note } from "../Note";
 import { URGENCY } from "../overview";
 import { Plaque } from "../Panel";
 import { type DashboardView, findPlant, latestReading } from "../view";
+
+/**
+ * Has the notes written again now, for every garden, and then loads the page's data afresh.
+ * It is the page's own doing: the mentor is not asked, and nothing is said in the conversation.
+ */
+function RefreshNotes() {
+  const action = useAction();
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={action.busy}
+        className="mt-1 -ml-2.5 text-muted-foreground"
+        onClick={() =>
+          action.run(async () => {
+            await api.refreshInsights();
+            notifyDataChanged();
+          })
+        }
+      >
+        <RefreshCw aria-hidden="true" className={cn(action.busy && "animate-spin")} />
+        {action.busy ? "Refreshing insights…" : "Refresh insights"}
+      </Button>
+      {action.error && (
+        <p role="alert" className="mt-1 mb-0 max-w-xs border-l-2 border-grove-act pl-2 text-sm font-bold">
+          {action.error}
+        </p>
+      )}
+    </>
+  );
+}
 
 /**
  * What was written about the garden as a whole, and when its monitors were last heard from.
@@ -47,6 +84,7 @@ export function GardenNotes({ view }: { view: DashboardView }) {
                 ? `Notes written ${timeAgo(insights.generatedAt)}.`
                 : "No notes have been written yet."}
           </p>
+          <RefreshNotes />
           {monitors}
         </div>
         {notes.length > 0 && (

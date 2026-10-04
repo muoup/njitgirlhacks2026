@@ -74,7 +74,17 @@ function SignedIn({ user }: { user: SessionUser }) {
 /** Where questions about the garden are asked, of a gnome or a wizard. */
 export function Mentor() {
   const session = auth.useSession();
-  if (session.status === "loading") return <div role="status" aria-label="Loading" className="min-h-svh bg-background" />;
+  if (session.status === "loading") {
+    // The grove is already standing while the session is looked up, so the page does not start blank.
+    return (
+      <div role="status" aria-label="Loading" className="min-h-svh bg-background">
+        <div className="relative">
+          <GroveStrip className="h-[250px] [--floor:44px] sm:h-[214px] sm:[--floor:44px]" />
+          <Wordmark to="/dashboard" />
+        </div>
+      </div>
+    );
+  }
   if (session.status === "signed-out") return <Navigate to="/signin" replace />;
   return <SignedIn user={session.user} />;
 }

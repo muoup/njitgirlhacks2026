@@ -75,6 +75,7 @@ export function StateMessage({
   );
 }
 
+/** The place of something still loading: a blank board, cut like the plaque that will stand there. */
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={cn("animate-pulse rounded-xl bg-muted", className)} />;
+  return <div aria-hidden="true" className={cn("animate-pulse bg-muted", className)} style={{ clipPath: CUTS[0] }} />;
 }

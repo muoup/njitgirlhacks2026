@@ -2,6 +2,8 @@ import { t, type Static } from "elysia";
 import { logFailure } from "./diagnostics";
 
 const HOUR = 3_600_000;
+// How long a failing forecast is left alone before it is asked for again.
+const RETRY = 5 * 60_000;
 
 export const Place = t.Object({
   name: t.String({ minLength: 1, maxLength: 200, pattern: "\\S", description: "The town as it is shown, such as Miami, Florida, United States." }),
@@ -72,9 +74,13 @@ export function coarse<T extends Pick<PlaceData, "latitude" | "longitude">>(plac
   return { ...place, latitude: round(place.latitude, 2), longitude: round(place.longitude, 2) };
 }
 
+/** Thrown in place of asking again, while a forecast that just failed is being left alone. */
+export class WeatherAway extends Error {}
+
 /** Open-Meteo: forecasts and town search without a key. A forecast is kept for an hour. */
 export class OpenMeteo implements WeatherSource {
   private readonly cache = new Map<string, { at: number; fetchedAt: string; days: ForecastDayData[] }>();
+  private readonly failedAt = new Map<string, number>();
 
   constructor(private readonly fetcher: typeof fetch = fetch, private readonly clock: () => number = Date.now) {}
 
@@ -99,15 +105,25 @@ export class OpenMeteo implements WeatherSource {
     const now = this.clock();
     const kept = this.cache.get(key);
     if (kept && now - kept.at < HOUR) return { fetchedAt: kept.fetchedAt, days: kept.days };
+    // A forecast a few hours old is better than none while the service is away.
+    const stale = kept && now - kept.at < 6 * HOUR ? { fetchedAt: kept.fetchedAt, days: kept.days } : undefined;
+    // A page that asks every few seconds must not wait on a failing service each time, nor keep knocking on it.
+    const failed = this.failedAt.get(key);
+    if (failed !== undefined && now - failed < RETRY) {
+      if (stale) return stale;
+      throw new WeatherAway("The forecast failed a moment ago and is not being asked for again yet.");
+    }
     const url = new URL("https://api.open-meteo.com/v1/forecast");
     url.search = String(new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), timezone: "auto", forecast_days: "7",
       daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunshine_duration,wind_gusts_10m_max" }));
     let daily: Record<string, any[]>;
     try { daily = (await this.get(url)).daily; } catch (error) {
-      // A forecast a few hours old is better than none while the service is away.
-      if (kept && now - kept.at < 6 * HOUR) return { fetchedAt: kept.fetchedAt, days: kept.days };
+      if (this.failedAt.size >= 500) this.failedAt.clear();
+      this.failedAt.set(key, now);
+      if (stale) return stale;
       throw error;
     }
+    this.failedAt.delete(key);
     const days = (daily.time as string[]).map((date, index): ForecastDayData => {
       const measured = {
         sky: sky(daily.weather_code?.[index] ?? 0),
@@ -131,7 +147,8 @@ export async function forecastFor(weather: WeatherSource | undefined, garden: { 
   if (!weather || !garden.location) return undefined;
   try { return { place: garden.location.name, ...await weather.forecast(garden.location) }; }
   catch (error) {
-    logFailure(error, { scope: "weather" });
+    // The failure itself was logged when it happened; the quiet spell after it is not news.
+    if (!(error instanceof WeatherAway)) logFailure(error, { scope: "weather" });
     return undefined;
   }
 }

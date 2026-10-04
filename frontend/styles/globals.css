@@ -17,6 +17,7 @@
   --color-grove-ok: var(--grove-ok);
   --color-grove-watch: var(--grove-watch);
   --color-grove-act: var(--grove-act);
+  --color-grove-rain: var(--grove-rain);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -124,6 +125,8 @@
   --grove-ok: #9fd89a;
   --grove-watch: #f2b648;
   --grove-act: #f0694f;
+  /* Rain, wherever a forecast shows it. */
+  --grove-rain: #a9d8f5;
 }
 
 @layer base {
