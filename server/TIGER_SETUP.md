@@ -208,4 +208,5 @@ receipt/idempotency records currently have no automatic expiration.
 If a check fails, the terminal prints safe `BFF failure` diagnostics. DNS/timeouts
 usually point to URL/network access; PostgreSQL 28P01 indicates database login,
 42501 permissions, and 42P01/3F000 missing relations/schema. TLS failures need the
-correct provider CA/hostname. No keys, database URLs, or request bodies are logged.
+correct provider CA/hostname. No keys or database URLs are logged, and no request bodies
+except the start of a device submission that was refused (`Ingest failure`).

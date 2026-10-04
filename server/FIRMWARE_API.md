@@ -84,6 +84,14 @@ colour. Reusing a sample ID with changed values or a changed colour returns 409
 - 503: database ingestion isn't configured.
 - Network/5xx: retry the same sample with bounded exponential backoff; never generate a new ID just because a response was lost.
 
+Every refused submission is written to the server's terminal as `Ingest failure`,
+with the status, the reasons (for a schema mismatch, where in the body), the
+`Content-Type`, `Content-Length` and `User-Agent` sent, whether a key came and was
+well formed, and the first 600 characters of the body. The key itself is never
+written. A request so malformed that it never reaches the route (a broken request
+line or header, a body over the size limit) is refused before this and leaves no
+entry.
+
 Raw ADC and AQ values must be integers from 0 to 65535. Pressure is 0–200000 Pa, temperature -100–150 °C, and altitude
 -2000–30000 m. These are input sanity limits, not plant-health thresholds.
 NaN/Infinity and unknown fields are rejected. Each metric occurs at most once.

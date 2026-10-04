@@ -63,6 +63,11 @@ beforeAll(async () => {
 }, 30_000);
 afterAll(async () => { await fixture?.pool.end(); });
 
+// Device submissions are refused here on purpose, and the log of each is not wanted among the results.
+const logError = console.error;
+beforeAll(() => { console.error = (...parts: unknown[]) => { if (parts[0] !== "Ingest failure") logError(...parts); }; });
+afterAll(() => { console.error = logError; });
+
 describe("PostgreSQL-backed app", () => {
   test("schema checks pass and new accounts start empty", async () => {
     expect((await checkDatabase(fixture.pool)).schemaReady).toBe(true);

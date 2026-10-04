@@ -1,6 +1,6 @@
 import { cors } from "@elysiajs/cors";
 import { openapi, type ElysiaOpenAPIConfig } from "@elysiajs/openapi";
-import { Elysia, t } from "elysia";
+import { Elysia, ParseError, t } from "elysia";
 import type { BetterAuthOptions } from "better-auth";
 import { createAuth, seedDemoAccount } from "./auth";
 import { MockBackend, type BackendAdapter, type BackendIdentity } from "./backend";
@@ -11,11 +11,13 @@ import { ApiError } from "./errors";
 import { DomainService } from "./domain";
 import { AgentService } from "./agent/service";
 import { GeminiRunner, type AgentRunner } from "./agent/runner";
-import { logFailure } from "./diagnostics";
+import { logFailure, logIngestFailure } from "./diagnostics";
 import { IngestRequest, IngestResponse } from "./ingestion";
 import { hashKey } from "./storage/keys";
 import { metricCatalogue } from "./metrics";
 import { forecastFor, OpenMeteo, type WeatherSource } from "./weather";
+
+const INGEST_PATH = "/api/v1/ingest/readings";
 
 const errorResponses = {
   400: s.ErrorResponse,
@@ -49,6 +51,8 @@ export async function createApp(options: {
     Date.now, 60_000, weather);
   const domain = new DomainService(backend);
   const ingestLimits = new Map<string, { at: number; count: number }>();
+  // What each device submission sent, as text, kept only so a refused one can be logged.
+  const ingestBodies = new WeakMap<Request, string>();
   function requestId(request: Request) {
     const value = request.headers.get("Idempotency-Key");
     if (value && !/^[A-Za-z0-9_.:-]{1,120}$/.test(value)) throw new ApiError(422, "INVALID_REQUEST", "Invalid Idempotency-Key.");
@@ -120,6 +124,14 @@ export async function createApp(options: {
       allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     }))
     .onError(({ code, error, set, request }) => {
+      if (new URL(request.url).pathname === INGEST_PATH && request.method === "POST") {
+        const refused = error instanceof ApiError ? { status: error.status, code: error.code, reasons: [error.message] }
+          : code === "VALIDATION" ? { status: 422, code: "INVALID_REQUEST",
+            reasons: error.all.slice(0, 6).map(issue => `${issue.path || "(body)"}: ${issue.summary ?? issue.message}`) }
+          : code === "PARSE" ? { status: 400, code: "INVALID_REQUEST", reasons: ["The body is not valid JSON."] }
+          : null;
+        if (refused) logIngestFailure(request, { ...refused, body: ingestBodies.get(request) });
+      }
       if (error instanceof ApiError) {
         if (error.status >= 500 && error.status !== 501) {
           logFailure(error, { scope: "http", path: new URL(request.url).pathname });
@@ -169,7 +181,7 @@ export async function createApp(options: {
       detail: { tags: ["Account"], summary: "List the ways to sign in", operationId: "listSignInMethods",
         description: "Email and password always work. Google is offered only when the server has OAuth credentials." },
     })
-    .post("/api/v1/ingest/readings", async ({ request, body, set }) => {
+    .post(INGEST_PATH, async ({ request, body, set }) => {
       set.headers["Cache-Control"] = "no-store";
       const header = request.headers.get("Authorization") ?? "";
       const match = /^Bearer (grove_device_[A-Za-z0-9_-]{43})$/i.exec(header);
@@ -188,6 +200,13 @@ export async function createApp(options: {
       set.status = result.duplicate ? 200 : 201;
       return result;
     }, {
+      // Read as text first, so that a body which is not JSON can still be shown in the log.
+      async parse({ request, contentType }) {
+        const text = await request.text();
+        ingestBodies.set(request, text);
+        if (contentType !== "application/json") return text;
+        try { return JSON.parse(text); } catch { throw new ParseError(); }
+      },
       body: IngestRequest, response: { ...errorResponses, 200: IngestResponse, 201: IngestResponse },
       detail: { tags: ["Ingestion"], operationId: "submitSensorReading", security: [{ plantApiKey: [] }],
         summary: "Submit one firmware sensor sample", description: "Key determines account, plant, and device. Reuse sampleId unchanged on retries. measuredAt is optional. Raw ADC/AQ values are not calibrated percentages, ppm, or lux. The colour sensor's reading is one hex value, color. No Gemini call is made during ingestion." },
