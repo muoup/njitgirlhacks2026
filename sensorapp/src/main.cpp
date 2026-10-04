@@ -49,7 +49,8 @@ Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS3472
 /**
  * Parameters for wireless module
  */
-WiFiServer server(80);
+IPAddress serverIP(10,196,226,157);
+WiFiSSLClient client;
 
 void printMacAddress(byte mac[]) {
     for (int i = 0; i < 6; i++) {
@@ -174,6 +175,25 @@ void setup() {
     Serial.print("You're connected to the network");
     printCurrentNet();
     printWifiData();
+
+    // Connect to webserver
+    Serial.print("\nStarting connection to server ");
+    Serial.println(serverIP);
+    // if you get a connection, report back via serial:
+
+    if (client.connect(serverIP, 4500)) {
+        Serial.println("connected to server");
+        // Make a HTTP request:
+        std::string requestBody = "{\n\"sampleId\": \"" + + "\",\n\"price\": 69,\n\"qty\": 1}";
+        client.println("POST /api/v1/ingest/readings HTTP/1.1");
+        client.print("Host: ");
+        client.println(serverIP);
+        client.println("Connection: keep-alive");
+        client.println("Content-type: application/json");
+        client.println("Content-length: ");
+        client.println();
+        client.println(requestBody);
+    }
 }
 
 // Tracks how often loops are called
