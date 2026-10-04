@@ -1,13 +1,16 @@
 import { Eraser, SendHorizontal } from "lucide-react";
-import { type FormEvent, type Ref, useEffect, useId, useRef, useState } from "react";
+import { type FormEvent, Fragment, type Ref, useEffect, useId, useRef, useState } from "react";
 
 import { Plank } from "@/components/dashboard/BandHeader";
+import { BlockView, LatestReading } from "@/components/dashboard/Blocks";
+import { MetricCatalogue, useFetchedCatalogue } from "@/components/dashboard/metrics";
 import { Confirm } from "@/components/shed/Confirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useMentor } from "./conversation";
-import { MENTORS, type Persona, PERSONAS, STARTERS } from "./mentors";
+import { type ChatMessage, MENTORS, type Persona, PERSONAS, STARTERS } from "./mentors";
+import { Prose } from "./Prose";
 import type { PendingAction } from "@/lib/api";
 
 /**
@@ -70,6 +73,33 @@ export function PersonaSwitch({ roomy = false, className }: { roomy?: boolean; c
 
 const SAID = "m-0 max-w-[85%] self-start border-0 border-l-[3px] border-solid bg-card px-4 py-2.5 leading-relaxed";
 
+/**
+ * What a reply asked to have drawn, on a dark board under it. The chat has no garden open,
+ * so it fetches the metric catalogue and each plant's readings itself.
+ */
+function Shown({ blocks, plants = [] }: Required<Pick<ChatMessage, "blocks">> & Pick<ChatMessage, "plants">) {
+  const catalogue = useFetchedCatalogue();
+  return (
+    <MetricCatalogue value={catalogue}>
+      <div className="grid w-[min(100%,30rem)] gap-5 self-start bg-[#14271b] p-4 text-base">
+        {blocks.map((block, index) => {
+          const plantId = "plantId" in block ? block.plantId : undefined;
+          const subject = plants.find(plant => plant.id === plantId)?.name;
+          if (block.type === "steps") return <BlockView key={index} block={block} plantId="" reading={undefined} />;
+          if (!plantId) return null;
+          return block.type === "readings" || block.type === "meter" ? (
+            <LatestReading key={index} plantId={plantId}>
+              {reading => <BlockView block={block} plantId={plantId} reading={reading} subject={subject} />}
+            </LatestReading>
+          ) : (
+            <BlockView key={index} block={block} plantId={plantId} reading={undefined} subject={subject} />
+          );
+        })}
+      </div>
+    </MetricCatalogue>
+  );
+}
+
 function ApprovalCard({ action }: { action: PendingAction }) {
   const { busy, decide } = useMentor();
   const expired = Date.parse(action.expiresAt) <= Date.now();
@@ -97,52 +127,75 @@ function ApprovalCard({ action }: { action: PendingAction }) {
 export function Conversation({ className }: { className?: string }) {
   const { persona, thread, busy } = useMentor();
   const log = useRef<HTMLDivElement>(null);
+  const said = useRef<HTMLDivElement>(null);
+  // Whether the newest words are in view, so that what loads under them later can be kept in view too.
+  const following = useRef(true);
   const mentor = MENTORS[persona];
 
   useEffect(() => {
+    following.current = true;
     log.current?.scrollTo({ top: log.current.scrollHeight });
   }, [thread, busy]);
+  useEffect(() => {
+    if (!said.current || !log.current) return;
+    // A chart under a reply arrives after the reply and makes it taller; a smaller window leaves less room for it.
+    const observer = new ResizeObserver(() => {
+      if (following.current) log.current?.scrollTo({ top: log.current.scrollHeight });
+    });
+    observer.observe(said.current);
+    observer.observe(log.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div
       ref={log}
       role="log"
       aria-label="Conversation"
+      onScroll={event => {
+        const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
+        following.current = scrollHeight - scrollTop - clientHeight < 48;
+      }}
       // Positioned so the hidden labels inside scroll with it instead of stretching the page.
       // Older words fade out at the top rather than meeting an edge.
       className={cn(
-        "relative flex flex-col gap-3 overflow-x-hidden overflow-y-auto mask-[linear-gradient(to_bottom,transparent,black_1.75rem)] px-3 pt-6 pb-3",
+        "relative overflow-x-hidden overflow-y-auto mask-[linear-gradient(to_bottom,transparent,black_1.75rem)] px-3 pt-6 pb-3",
         className,
       )}
     >
-      {thread.map((message, index) =>
-        message.action ? <ApprovalCard key={message.action.id} action={message.action} /> : message.from === "you" ? (
-          <p
-            key={index}
-            className="m-0 max-w-[80%] self-end px-4 py-2.5 leading-relaxed text-grove-parchment"
-            style={{
-              background: "var(--grove-wood)",
-              clipPath: "polygon(0 2px, calc(100% - 3px) 0, 100% calc(100% - 3px), 2px 100%)",
-            }}
-          >
-            <span className="sr-only">You: </span>
-            {message.text}
+      <div ref={said} className="flex flex-col gap-3">
+        {thread.map((message, index) =>
+          message.action ? <ApprovalCard key={message.action.id} action={message.action} /> : message.from === "you" ? (
+            <p
+              key={index}
+              className="m-0 max-w-[80%] self-end px-4 py-2.5 leading-relaxed text-grove-parchment"
+              style={{
+                background: "var(--grove-wood)",
+                clipPath: "polygon(0 2px, calc(100% - 3px) 0, 100% calc(100% - 3px), 2px 100%)",
+              }}
+            >
+              <span className="sr-only">You: </span>
+              {message.text}
+            </p>
+          ) : (
+            <Fragment key={index}>
+              <div className={SAID} style={{ borderColor: MENTORS[message.from].color }}>
+                <span className="sr-only">{MENTORS[message.from].name}: </span>
+                <Prose text={message.text} />
+              </div>
+              {message.blocks && message.blocks.length > 0 && <Shown blocks={message.blocks} plants={message.plants} />}
+            </Fragment>
+          ),
+        )}
+        {busy && (
+          <p className={SAID} style={{ borderColor: mentor.color }}>
+            <span className="sr-only">{mentor.name} is thinking</span>
+            <span aria-hidden="true" className="animate-pulse font-bold tracking-widest">
+              &hellip;
+            </span>
           </p>
-        ) : (
-          <p key={index} className={SAID} style={{ borderColor: MENTORS[message.from].color }}>
-            <span className="sr-only">{MENTORS[message.from].name}: </span>
-            {message.text}
-          </p>
-        ),
-      )}
-      {busy && (
-        <p className={SAID} style={{ borderColor: mentor.color }}>
-          <span className="sr-only">{mentor.name} is thinking</span>
-          <span aria-hidden="true" className="animate-pulse font-bold tracking-widest">
-            &hellip;
-          </span>
-        </p>
-      )}
+        )}
+      </div>
     </div>
   );
 }

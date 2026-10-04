@@ -114,3 +114,11 @@ returns at most 361 actual samples: the last sample in each time bucket, minimum
 bucket 60 seconds, with `sampling: { method: "last", bucketSeconds }`. For a
 seven-day range the buckets are wider. The dashboard's latest reading is unsampled.
 Agent summaries explicitly describe selected points, not all raw samples.
+
+Storage keeps exactly what the firmware sent. On the way out, `src/metrics.ts`
+turns each reading into what the dashboard and agent show: soil and light counts
+become positions on a 0-100 calibration with a word (Dry, Damp, Bright), pressure
+becomes hPa, and the other counts lose their unit. The calibration end points in
+that file are placeholders until the prototype's sensors are measured. The same
+file is the metric catalogue (label, tier, scale, healthy range) sent with the
+dashboard as `metrics`.

@@ -110,6 +110,7 @@ describe("garden agent harness", () => {
     const runner = new Runner(async input => {
       expect(input.mode).toBe("scheduled");
       expect(input.tools.proposeAction).toBeUndefined();
+      expect(input.tools.loadSkill).toBeUndefined(); // Skills arrive in its instructions.
       expect(Object.keys(input.tools)).not.toContain("mutate");
       return insights(input);
     });
@@ -126,7 +127,7 @@ describe("garden agent harness", () => {
     expect(backend.mutations).toHaveLength(0);
   });
 
-  test("invalid chart references and failures retain the last successful insight result", async () => {
+  test("uncovered plants and failures retain the last successful insight result", async () => {
     const backend = new MockBackend(() => initialTime);
     const runner = new Runner();
     const agents = new AgentService(backend, runner, () => initialTime);
@@ -136,7 +137,7 @@ describe("garden agent harness", () => {
     const before = agents.decorate(alice, dashboard.insights);
     runner.handle = async input => {
       const output = insights(input);
-      output.gardens[0]!.overviews[0]!.blocks = [{ type: "chart", range: "7d", metric: "invented" }];
+      output.gardens[0]!.overviews.pop();
       return output;
     };
     await expect(agents.refresh(alice)).rejects.toMatchObject({ code: "INVALID_AGENT_OUTPUT" });
@@ -146,6 +147,132 @@ describe("garden agent harness", () => {
     expect(after.generation?.state).toBe("failed");
     runner.handle = async () => { throw new Error("Private provider failure"); };
     await expect(agents.refresh(alice)).rejects.toMatchObject({ code: "AGENT_FAILED", message: "The mentor could not complete this run. Try again." });
+  });
+
+  test("a block that cannot be drawn is dropped on its own; the rest of the run is published", async () => {
+    const backend = new MockBackend(() => initialTime);
+    const runner = new Runner(async input => {
+      const output = insights(input);
+      const garden = input.context.gardens.find(item => item.garden.id === output.gardens[0]!.gardenId)!;
+      const [first, second] = output.gardens[0]!.overviews;
+      const soil = garden.histories.find(history => history.plantId === first!.plantId)!.metrics.find(metric => metric.metric === "soil_moisture")!;
+      first!.blocks = [
+        { type: "chart", range: "7d", metric: "invented" },
+        { type: "meter", metric: "soil_moisture" },
+        { type: "meter", metric: "soil_moisture" },
+        { type: "meter", plantId: second!.plantId, metric: "soil_moisture" },
+        { type: "stat", metric: "light_level" },
+        { type: "steps", items: ["Water it today.", "**Then** wait.", "x".repeat(91)] },
+        { type: "chart", range: "7d", metric: "soil_moisture", marks: [
+          { at: soil.last.at, label: "Started drying" },
+          { at: "2020-01-01T00:00:00.000Z", label: "Long ago" },
+          { at: soil.first.at, label: "A label that runs on for far too long" },
+        ] },
+        { type: "readings" },
+      ];
+      output.gardens[0]!.blocks = [
+        { type: "chart", plantId: first!.plantId, range: "24h", metric: "soil_moisture" },
+        { type: "meter", plantId: "another-account", metric: "soil_moisture" },
+        { type: "readings" },
+        { type: "meter", plantId: first!.plantId },
+      ];
+      return output;
+    });
+    const agents = new AgentService(backend, runner, () => initialTime);
+    expect((await agents.refresh(alice)).refreshed).toBe(true);
+    expect(runner.calls).toHaveLength(1);
+    const { gardens } = await backend.listGardens(alice);
+    const dashboard = (await backend.hydrateDashboard(alice, gardens[0]!.id))!;
+    const published = agents.decorate(alice, dashboard.insights);
+    const plantId = published.overviews![0]!.plantId;
+    expect(published.overviews![0]!.blocks).toEqual([
+      { type: "meter", metric: "soil_moisture" },
+      { type: "steps", items: ["Water it today."] },
+      { type: "chart", range: "7d", metric: "soil_moisture", marks: [{ at: expect.any(String), label: "Started drying" }] },
+    ]);
+    // A meter that names no metric is about the reading furthest from healthy.
+    expect(published.blocks).toEqual([{ type: "chart", plantId, range: "24h", metric: "soil_moisture" },
+      { type: "meter", plantId, metric: expect.stringMatching(/^(soil_moisture|temperature|humidity)$/) }]);
+    expect(published.layout).toBeUndefined();
+  });
+
+  test("a generated order is used only when every plant has one place and urgent plants lead", async () => {
+    const backend = new MockBackend(() => initialTime);
+    type Layout = NonNullable<InsightOutputData["gardens"][number]["layout"]>;
+    let order: (ids: string[]) => Layout = () => [];
+    const runner = new Runner(async input => {
+      const output = insights(input);
+      const garden = output.gardens[0]!;
+      garden.overviews[0]!.urgency = "act";
+      garden.layout = order(garden.overviews.map(overview => overview.plantId));
+      return output;
+    });
+    const agents = new AgentService(backend, runner, () => initialTime);
+    const { gardens } = await backend.listGardens(alice);
+    const layout = async () => {
+      await agents.refresh(alice);
+      const dashboard = (await backend.hydrateDashboard(alice, gardens[0]!.id))!;
+      return agents.decorate(alice, dashboard.insights).layout;
+    };
+    order = ([urgent, ...rest]) => [{ type: "plant", plantId: urgent }, { type: "calm-plants", plantIds: rest }];
+    const published = (await layout())!;
+    expect(published.map(stop => stop.type)).toEqual(["plant", "calm-plants", "garden-notes"]);
+    // The urgent plant is not first.
+    order = ([urgent, ...rest]) => [{ type: "calm-plants", plantIds: rest }, { type: "plant", plantId: urgent }];
+    expect(await layout()).toBeUndefined();
+    // A plant is missing, then one appears twice, then one is unknown.
+    order = ([urgent]) => [{ type: "plant", plantId: urgent }];
+    expect(await layout()).toBeUndefined();
+    order = ([urgent, ...rest]) => [{ type: "plant", plantId: urgent }, { type: "calm-plants", plantIds: [...rest, urgent!] }];
+    expect(await layout()).toBeUndefined();
+    order = ([urgent, ...rest]) => [{ type: "plant", plantId: urgent }, { type: "calm-plants", plantIds: [...rest, "another-account"] }];
+    expect(await layout()).toBeUndefined();
+  });
+
+  test("a chat reply carries at most two drawable blocks and remembers what it showed", async () => {
+    const backend = new MockBackend(() => initialTime);
+    const runner = new Runner(async input => {
+      const plantId = input.context.gardens.flatMap(garden => garden.histories).find(history => history.metrics.length)!.plantId;
+      return { reply: "Here is the soil.", blocks: [
+        { type: "meter", metric: "soil_moisture" },
+        { type: "chart", plantId, range: "7d", metric: "soil_moisture" },
+        { type: "stat", plantId, metric: "soil_moisture", range: "24h" },
+        { type: "readings", plantId },
+      ] };
+    });
+    const agents = new AgentService(backend, runner, () => initialTime);
+    const response = await agents.chat(alice, { persona: "gnome", message: "How is the soil?", requestId: "blocks" });
+    expect(response.blocks.map(block => block.type)).toEqual(["chart", "stat"]);
+    expect(response.plants).toHaveLength(1);
+    expect(response.blocks.every(block => "plantId" in block && block.plantId === response.plants[0]!.id)).toBe(true);
+    await agents.chat(alice, { persona: "gnome", message: "And now?", requestId: "next", conversationId: response.conversationId });
+    expect(runner.calls[1]!.history[1]!.content).toContain(`Shown under this reply: chart of Soil for ${response.plants[0]!.name} over 7d`);
+  });
+
+  test("unpublishable prose gets one correction; a second failure keeps the previous insights", async () => {
+    const backend = new MockBackend(() => initialTime);
+    const spoiled = (input: RunInput, text: string) => {
+      const output = insights(input);
+      output.gardens[0]!.overviews[0]!.text = text;
+      return output;
+    };
+    const runner = new Runner(async input => input.history.length
+      ? insights(input) : spoiled(input, "Only one reading at 2026-10-04T06:48:33.078Z (soil 810 ADC)."));
+    const agents = new AgentService(backend, runner, () => initialTime);
+    expect((await agents.refresh(alice)).refreshed).toBe(true);
+    expect(runner.calls).toHaveLength(2);
+    expect(runner.calls[1]!.history[0]!.role).toBe("assistant");
+    expect(runner.calls[1]!.history[1]!.content).toContain("date or clock time");
+    expect(runner.calls[1]!.history[1]!.content).toContain("raw sensor count");
+    const { gardens } = await backend.listGardens(alice);
+    const dashboard = (await backend.hydrateDashboard(alice, gardens[0]!.id))!;
+    const published = agents.decorate(alice, dashboard.insights);
+    expect(published.overviews![0]!.text).toBe("Look at the recent soil trend.");
+    for (const text of ["**Water** it today.", "soil_moisture_raw is low.", `See ${dashboard.plants[0]!.id}.`, "x".repeat(281)]) {
+      runner.handle = async input => spoiled(input, text);
+      await expect(agents.refresh(alice)).rejects.toMatchObject({ code: "INVALID_AGENT_OUTPUT" });
+    }
+    expect(agents.decorate(alice, dashboard.insights).overviews).toEqual(published.overviews);
   });
 
   test("runs cannot overlap for one account, and unconfigured chat does not fabricate replies", async () => {

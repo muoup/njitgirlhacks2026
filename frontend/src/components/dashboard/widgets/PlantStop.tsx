@@ -3,53 +3,27 @@ import type { CSSProperties } from "react";
 
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { Button } from "@/components/ui/button";
-import type { Reading } from "@/lib/api";
-import { formatMeasurement, metricLabel, timeAgo } from "@/lib/format";
-import { LineChart } from "../LineChart";
+import { spanInWords, timeAgo } from "@/lib/format";
+import { BlockView, isWide } from "../Blocks";
+import { type Metrics, useMetrics } from "../metrics";
 import { Note } from "../Note";
 import { type OverviewBlock, type PlantOverview, URGENCY, urgencyLabel } from "../overview";
-import { Plaque, Skeleton } from "../Panel";
-import { mostMoved, rangeOf, seriesByMetric, usePlantReadings } from "../readings";
+import { Plaque } from "../Panel";
 import { type DashboardView, findPlant, latestReading } from "../view";
 
-/** The latest numbers, written large and plain. */
-function ReadingsBlock({ reading }: { reading: Reading | undefined }) {
-  if (!reading) return <p className="m-0 text-sm text-muted-foreground">No readings have arrived for this plant yet.</p>;
-  return (
-    <dl className="m-0 flex flex-wrap gap-x-8 gap-y-3">
-      {reading.measurements.map(measurement => (
-        <div key={measurement.metric}>
-          <dd className="m-0 text-3xl leading-none font-bold tabular-nums">{formatMeasurement(measurement)}</dd>
-          <dt className="mt-1 text-xs text-muted-foreground">{metricLabel(measurement.metric)}</dt>
-        </div>
-      ))}
-    </dl>
-  );
+const HOUR = 3_600_000;
+
+function listed(words: string[]) {
+  return words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : (words[0] ?? "");
 }
 
-/** One metric over a range, in the plant's urgency colour. */
-function ChartBlock({ plantId, block }: { plantId: string; block: Extract<OverviewBlock, { type: "chart" }> }) {
-  const { resource } = usePlantReadings(plantId, block.range);
-  const range = rangeOf(block.range);
-
-  if (resource.status === "loading") return <Skeleton className="h-36" />;
-  if (resource.status === "error") return <p className="m-0 text-sm text-muted-foreground">The history couldn&rsquo;t be loaded.</p>;
-
-  const series = seriesByMetric(resource.data.readings);
-  const metric = block.metric ?? mostMoved(series);
-  const chosen = metric ? series.get(metric) : undefined;
-  if (!metric || !chosen) return <p className="m-0 text-sm text-muted-foreground">No readings in the last {range.label}.</p>;
-
-  return (
-    <LineChart
-      title={`${metricLabel(metric)}, last ${range.label}`}
-      unit={chosen.unit}
-      points={chosen.points}
-      from={Date.parse(resource.data.from)}
-      to={Date.parse(resource.data.to)}
-      height={132}
-    />
-  );
+/** "Based on soil and warmth over 2 days.": what the note rests on, from the evidence that came with it. */
+function basis(evidence: PlantOverview["evidence"], metrics: Metrics) {
+  if (evidence.length === 0) return null;
+  const names = listed([...new Set(evidence.map(item => metrics.label(item.metric).toLowerCase()))]);
+  const span = Math.max(...evidence.map(item => Date.parse(item.to))) - Math.min(...evidence.map(item => Date.parse(item.from)));
+  if (span < HOUR) return `Based on the latest ${names}.`;
+  return `Based on ${names} over ${spanInWords(span)}.`;
 }
 
 /**
@@ -69,6 +43,7 @@ export function PlantStop({
   cut?: number;
   view: DashboardView;
 }) {
+  const metrics = useMetrics();
   const plant = findPlant(view.dashboard, overview.plantId);
   if (!plant) return null;
   const reading = latestReading(view.dashboard, plant.id);
@@ -102,15 +77,11 @@ export function PlantStop({
       <ArrowRight />
     </Button>
   );
-  const drawn = blocks.map((block, index) =>
-    block.type === "readings" ? (
-      <ReadingsBlock key={index} reading={reading} />
-    ) : (
-      <ChartBlock key={index} plantId={plant.id} block={block} />
-    ),
-  );
+  const draw = (shown: OverviewBlock[]) =>
+    shown.map((block, index) => <BlockView key={index} block={block} plantId={plant.id} reading={reading} />);
+  const steps = blocks.filter(block => block.type === "steps");
   const note = overview.text && (
-    <Note light={color} cut={cut}>
+    <Note light={color} cut={cut} foot={basis(overview.evidence, metrics)}>
       {overview.text}
     </Note>
   );
@@ -124,16 +95,18 @@ export function PlantStop({
           style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${color} 13%, transparent), transparent)` }}
         />
       )}
-      {blocks.some(block => block.type === "chart") ? (
+      {blocks.some(isWide) ? (
         <Plaque cut={cut}>
           <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
             <div className="min-w-0">
               {heading}
               {/* The note is set against the board and hangs a little off its edge. */}
               {note && <div className="mt-5 -ml-7 max-w-sm sm:-ml-9">{note}</div>}
+              {/* What to do follows what was said; the measurements have the other side to themselves. */}
+              {steps.length > 0 && <div className="mt-5 grid gap-5">{draw(steps)}</div>}
               <div className="mt-3">{move}</div>
             </div>
-            <div className="grid min-w-0 content-start gap-5">{drawn}</div>
+            <div className="grid min-w-0 content-start gap-5">{draw(blocks.filter(block => block.type !== "steps"))}</div>
           </div>
         </Plaque>
       ) : blocks.length > 0 ? (
@@ -141,11 +114,11 @@ export function PlantStop({
           <Plaque cut={cut}>
             <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-5">
               {heading}
-              {drawn}
+              {draw(blocks)}
             </div>
             <div className="mt-3">{move}</div>
           </Plaque>
-          {/* With no chart to sit beside, the note hangs over the board's lower edge. */}
+          {/* With nothing wide to sit beside, the note hangs over the board's lower edge. */}
           {note && <div className="relative z-10 -mt-6 mr-6 ml-auto max-w-sm">{note}</div>}
         </>
       ) : (

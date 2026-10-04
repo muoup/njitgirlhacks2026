@@ -78,7 +78,9 @@ Idempotency-Key; account-scoped database transactions persist replay results and
 reject reuse for different arguments. Secret responses use Cache-Control:no-store.
 The mock adapter still returns 501 for resource/key changes.
 
-Database readings preserve the frontend's measurement array and numeric units.
+Stored readings keep the firmware's measurement array and units; responses show
+them calibrated (see `src/metrics.ts` and the Dashboard history section of
+FIRMWARE_API.md).
 Latest samples are unsampled. History selects at most 361 actual samples, the
 last per time bucket (at least 60 seconds), and includes optional sampling
 metadata. Full raw samples remain stored. Plants have no assessed status until

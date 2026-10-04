@@ -180,7 +180,8 @@ firmware HTTPS client's trust configuration.
 2. Submit the documented sample with a real plant key; expect 201. Repeat it
    unchanged; expect 200 with `duplicate: true`.
 3. Open the plant dashboard/history and confirm all submitted metrics, units,
-   and monitor activity. Soil/light/AQ values remain raw, not calibrated units.
+   and monitor activity. Soil and light show on the provisional 0-100 calibration
+   in `src/metrics.ts`; storage keeps the raw counts.
 4. Restart the server and confirm account login, gardens, key retrieval, readings,
    and previously generated insights still work.
 5. Rotate the plant key and confirm the old key returns 401.

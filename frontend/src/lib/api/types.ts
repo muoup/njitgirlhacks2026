@@ -1,7 +1,7 @@
 // Type-only imports share the validated BFF contract without bundling server code.
 import type {
   GardenData as Garden, PlantData as Plant, PlantStatusData as PlantStatus,
-  DeviceData as Device, MeasurementData as Measurement, ReadingData as Reading,
+  DeviceData as Device, MeasurementData as Measurement, MetricInfoData as MetricInfo, ReadingData as Reading,
   InsightItemData as InsightItem, InsightsData as Insights, MetaData as Meta,
   GardensData as GardensResponse, DashboardData as DashboardResponse,
   ReadingsData as ReadingsResponse,
@@ -14,7 +14,7 @@ import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
 export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, RefreshResponse, PlantOverview };
 
 export type {
-  Garden, Plant, PlantStatus, Device, Measurement, Reading, InsightItem,
+  Garden, Plant, PlantStatus, Device, Measurement, MetricInfo, Reading, InsightItem,
   Insights, Meta, GardensResponse, DashboardResponse, ReadingsResponse,
   NewPlant, ApiKey, GardenResponse, ApiKeyResponse, PlantedResponse,
 };
@@ -51,6 +51,8 @@ export interface GroveApi {
   refreshInsights(): Promise<RefreshResponse>;
   listGardens(): Promise<GardensResponse>;
   getDashboard(gardenId: string): Promise<DashboardResponse>;
+  /** The metric catalogue, for pages that draw readings without a dashboard. */
+  listMetrics(): Promise<{ metrics: MetricInfo[] }>;
   /** The BFF accepts an ordered range of at most seven days. */
   getPlantReadings(plantId: string, from: Date, to: Date): Promise<ReadingsResponse>;
 

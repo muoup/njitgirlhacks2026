@@ -32,6 +32,7 @@ export function createBffApi(baseUrl: string): GroveApi {
     decideAgentAction: (id, decision) => request(`/chat/actions/${encodeURIComponent(id)}/decision`, "POST", { decision }),
     refreshInsights: () => request("/insights/refresh", "POST", {}),
     listGardens: () => request("/gardens"),
+    listMetrics: () => request("/metrics"),
     getDashboard: gardenId => request(`/dashboard?${new URLSearchParams({ gardenId })}`),
     getPlantReadings: (plantId, from, to) =>
       request(`${plant(plantId)}/readings?${new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })}`),

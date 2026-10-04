@@ -5,13 +5,14 @@ import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { AccountTag, GardenSign, SideBoard, TitleSign, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
-import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
+import { layoutFor, type WidgetSpec } from "@/components/dashboard/layout";
+import { MetricCatalogue } from "@/components/dashboard/metrics";
 import { type PlantOverview, standInOverviews, URGENCY, type Urgency } from "@/components/dashboard/overview";
 import { Skeleton, StateMessage } from "@/components/dashboard/Panel";
 import { Trail } from "@/components/dashboard/Trail";
 import { type DashboardView, lastHeardAt } from "@/components/dashboard/view";
 import { Widget } from "@/components/dashboard/Widget";
-import { api, ApiError, type DashboardResponse, type Garden } from "@/lib/api";
+import { api, ApiError, type DashboardResponse, type Garden, type MetricInfo } from "@/lib/api";
 import { auth, type SessionUser } from "@/lib/auth";
 import { timeAgo } from "@/lib/format";
 import { useResource } from "@/lib/useResource";
@@ -68,7 +69,7 @@ function GardenBody({ view }: { view: DashboardView }) {
   return (
     <Body>
       <Trail
-        stops={defaultLayout(dashboard, overviews, selectedId).map((spec, index) => ({
+        stops={layoutFor(dashboard, overviews, selectedId).map((spec, index) => ({
           key: `${spec.type}-${index}`,
           color: stopColor(spec, overviews),
           node: <Widget spec={spec} index={index} view={view} />,
@@ -116,6 +117,8 @@ function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overv
     </p>
   );
 }
+
+const NO_METRICS: MetricInfo[] = [];
 
 function SignedIn({ user }: { user: SessionUser }) {
   const [params, setParams] = useSearchParams();
@@ -182,6 +185,7 @@ function SignedIn({ user }: { user: SessionUser }) {
   }
 
   return (
+    <MetricCatalogue value={loaded?.metrics ?? NO_METRICS}>
     <div className="flex min-h-svh flex-col overflow-x-clip bg-background text-foreground">
       <div className="relative">
         <GroveBand
@@ -203,6 +207,7 @@ function SignedIn({ user }: { user: SessionUser }) {
         {body}
       </div>
     </div>
+    </MetricCatalogue>
   );
 }
 

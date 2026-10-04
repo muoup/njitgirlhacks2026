@@ -137,7 +137,8 @@ describe("PostgreSQL-backed app", () => {
     expect(result!.readings.length).toBeLessThanOrEqual(61);
     expect(result!.readings.at(-1)?.measuredAt).toBe(new Date(now).toISOString());
     expect(result!.sampling).toEqual({ method: "last", bucketSeconds: 60 });
-    expect(result!.readings[0]?.measurements[0]?.value).toBe(810);
+    // Stored as 810 ADC; shown on the soil calibration.
+    expect(result!.readings[0]?.measurements[0]).toEqual({ metric: "soil_moisture_raw", value: 9, unit: "%", word: "Dry" });
   });
   test("approval fingerprints are rechecked inside the mutation transaction", async () => {
     const domain = new DomainService(backend);

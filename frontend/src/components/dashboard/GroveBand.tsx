@@ -6,6 +6,7 @@ import { Planted } from "@/components/grove/Scene";
 import type { Plant, Reading } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { CompactReadings, readingInWords } from "./CompactReadings";
+import { useMetrics } from "./metrics";
 import { type PlantOverview, URGENCY, type Urgency, urgencyLabel } from "./overview";
 import "@/components/grove/grove.css";
 
@@ -134,8 +135,10 @@ export function GroveBand({
   selectedId: string | null;
   onSelect: (plantId: string | null) => void;
 }) {
+  const metrics = useMetrics();
   return (
-    <GroveStrip>
+    // The ground is deep enough for two rows of readings under each name, clear of where the trail sets off.
+    <GroveStrip className="sm:h-[346px] sm:[--floor:94px]">
       <div
         role="group"
         aria-label="Plants in this garden"
@@ -150,7 +153,7 @@ export function GroveBand({
               key={plant.id}
               type="button"
               aria-pressed={selected}
-              aria-label={`${plant.name}: ${urgencyLabel(urgency).toLowerCase()}, ${readingInWords(reading)}`}
+              aria-label={`${plant.name}: ${urgencyLabel(urgency).toLowerCase()}, ${readingInWords(reading, metrics)}`}
               onClick={() => onSelect(selected ? null : plant.id)}
               className="group relative flex w-[100px] shrink-0 cursor-pointer flex-col items-center border-0 bg-transparent p-0 pt-6 font-sans outline-none sm:w-[132px]"
             >

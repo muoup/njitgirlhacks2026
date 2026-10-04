@@ -69,10 +69,35 @@ operations and approved agent operations share DomainService and the backend ada
 
 The server caches validated account-wide generations in memory and, with database
 storage, saves them in `grove.agent_accounts`. Generated plant overviews contain
-urgency, headline, text, permitted readings/chart blocks, and evidence windows.
+urgency, headline, text, evidence windows, and up to three blocks from the kit in
+`src/agent/blocks.ts`: `readings`, `chart` (with up to two marked moments),
+`meter`, `stat` and `steps`. A block only chooses what to show; the page takes
+every value from the plant's readings and every scale and healthy range from the
+metric catalogue (`GET /api/v1/metrics`, also in the dashboard response). A garden
+may carry up to two blocks of its own, each naming a plant, and a `layout`: the
+order of its stops. A chat reply may carry up to two blocks, with the names of
+the plants they are about.
 Generation metadata separates ready/stale/refreshing/failed/unavailable states
 from the existing insight status, timestamps, and items. Sensor source stays
 mock/backend independently of whether Gemini generated the prose.
+
+Generated prose is checked before it is published (`src/agent/writing.ts`):
+headlines up to 60 characters, notes up to 280, and no dates, clock times, raw
+counts, metric identifiers, IDs or Markdown. Output that fails this or the
+structural checks is returned to the model once with what was wrong; a second
+failure fails the refresh and keeps the previous insights. Blocks and layouts
+are held to a different rule: the model writes them in a flat, loosely bounded
+shape, and one that cannot be drawn (an unknown plant, a metric the plant has not
+reported, a mark outside the chart, a step that is not plain words) is dropped on
+its own. A layout is published only if every plant has exactly one place and the
+plants that call for someone lead it, each as its own stop; otherwise the page
+orders the stops itself, as it does when plants have changed since. Readings reach the
+model already calibrated, with the metric catalogue from `src/metrics.ts`.
+A scheduled run is given every skill in its instructions and has five steps;
+chat loads skills on demand and has eight. The last step of either cannot call
+a tool, so a run always ends with an answer. Chat thinks at Gemini's medium
+level; a scheduled run at low, where it writes the same insights in a quarter
+of the time instead of thinking through its output allowance.
 
 With PostgreSQL, the worker rediscovers accounts active in the last 24 hours from
 the database. Browser requests and device ingestion record activity. Uploads,

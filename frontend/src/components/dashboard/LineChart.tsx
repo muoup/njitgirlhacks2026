@@ -7,6 +7,12 @@ export interface ChartPoint {
   value: number;
 }
 
+/** A moment on the chart worth pointing at, with a few words. */
+export interface ChartMark {
+  at: number;
+  label: string;
+}
+
 const MARGIN = { top: 10, right: 10, bottom: 24, left: 40 };
 const HOUR = 3_600_000;
 
@@ -23,11 +29,12 @@ function useWidth() {
   return [ref, width] as const;
 }
 
-/** Round axis values (1, 2 or 5 times a power of ten) covering the data with a little room. */
+/** Round axis values (1, 2 or 5 times a power of ten) covering `values` with a little room. */
 function yAxis(values: number[]) {
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const rough = Math.max(max - min, 0.4) / 2;
+  // A flat series still gets an axis, with steps large enough to label in whole numbers of its size.
+  const rough = Math.max(max - min, 0.4, Math.abs(max) / 100) / 2;
   const power = 10 ** Math.floor(Math.log10(rough));
   const step = [1, 2, 5, 10].find(n => n * power >= rough)! * power;
   const low = Math.floor(min / step) * step;
@@ -58,7 +65,8 @@ const moment = new Intl.DateTimeFormat("en", { weekday: "short", hour: "numeric"
 
 /**
  * One metric over time. Hover or drag to read a point; the latest value shows otherwise.
- * The line takes its colour from --chart-1, so a parent can tint it.
+ * The line takes its colour from --chart-1, so a parent can tint it. With a `band`, the
+ * axis reaches far enough to show the stretch the metric is healthy in.
  */
 export function LineChart({
   title,
@@ -67,6 +75,8 @@ export function LineChart({
   from,
   to,
   height = 156,
+  band,
+  marks = [],
 }: {
   title: string;
   unit: string;
@@ -74,6 +84,9 @@ export function LineChart({
   from: number;
   to: number;
   height?: number;
+  /** The stretch of values the metric is healthy in, shaded behind the line. */
+  band?: { from: number; to: number };
+  marks?: ChartMark[];
 }) {
   const [ref, width] = useWidth();
   const [hovered, setHovered] = useState<number | null>(null);
@@ -86,7 +99,8 @@ export function LineChart({
   let plot = null;
   if (last && width > 0) {
     const values = points.map(point => point.value);
-    const { low, high, ticks } = yAxis(values);
+    const { low, high, ticks } = yAxis(band ? [...values, band.from, band.to] : values);
+    const pointed = marks.filter(mark => mark.at >= from && mark.at <= to);
     const x = (at: number) => MARGIN.left + ((at - from) / (to - from)) * innerWidth;
     const y = (value: number) => MARGIN.top + (1 - (value - low) / (high - low)) * innerHeight;
     const line = points.map(point => `${x(point.at).toFixed(1)},${y(point.value).toFixed(1)}`).join(" ");
@@ -110,12 +124,24 @@ export function LineChart({
         width={width}
         height={height}
         role="img"
-        aria-label={`${title} from ${moment.format(first.at)} to ${moment.format(last.at)}: lowest ${formatMeasurement({ value: Math.min(...values), unit })}, highest ${formatMeasurement({ value: Math.max(...values), unit })}, latest ${formatMeasurement({ value: last.value, unit })}.`}
+        aria-label={[
+          `${title} from ${moment.format(first.at)} to ${moment.format(last.at)}: lowest ${formatMeasurement({ value: Math.min(...values), unit })}, highest ${formatMeasurement({ value: Math.max(...values), unit })}, latest ${formatMeasurement({ value: last.value, unit })}.`,
+          band && `Healthy from ${formatNumber(band.from)} to ${formatMeasurement({ value: band.to, unit })}.`,
+          ...pointed.map(mark => `${mark.label}: ${moment.format(mark.at)}.`),
+        ].filter(Boolean).join(" ")}
         className="block touch-pan-y"
         onPointerMove={track}
         onPointerDown={track}
         onPointerLeave={() => setHovered(null)}
       >
+        {band && (
+          <g>
+            <rect x={MARGIN.left} width={innerWidth} y={y(band.to)} height={y(band.from) - y(band.to)} className="fill-grove-ok/12" />
+            <text x={width - MARGIN.right - 5} y={y(band.to) + 12} textAnchor="end" className="fill-grove-ok/80 text-[10px]">
+              healthy
+            </text>
+          </g>
+        )}
         {ticks.map(tick => (
           <g key={tick}>
             <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(tick)} y2={y(tick)} className="stroke-border/70" />
@@ -141,6 +167,27 @@ export function LineChart({
           className="fill-chart-1/15"
         />
         <polyline points={line} fill="none" strokeWidth="2" strokeLinejoin="round" className="stroke-chart-1" />
+        {pointed.map((mark, index) => {
+          const at = x(mark.at);
+          // A label near the right-hand edge is written to the left of its line.
+          const flipped = at > width - MARGIN.right - 110;
+          return (
+            <g key={`${mark.at}-${index}`}>
+              <line x1={at} x2={at} y1={MARGIN.top} y2={floor} strokeDasharray="3 3" className="stroke-grove-parchment/70" />
+              <text
+                x={at + (flipped ? -6 : 6)}
+                y={MARGIN.top + 10 + index * 14}
+                textAnchor={flipped ? "end" : "start"}
+                className="fill-grove-parchment text-[11px] font-bold"
+                stroke="var(--plaque-face, #14271b)"
+                strokeWidth="3"
+                style={{ paintOrder: "stroke" }}
+              >
+                {mark.label}
+              </text>
+            </g>
+          );
+        })}
         {shown && (
           <g>
             {hovered !== null && (

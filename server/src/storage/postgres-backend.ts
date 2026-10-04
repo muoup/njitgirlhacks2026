@@ -8,6 +8,7 @@ import { validateSample, type IngestData, type IngestResult } from "../ingestion
 import { DeviceKeys, hashKey } from "./keys";
 import { transaction } from "./database";
 import { DomainService } from "../domain";
+import { calibrate, metricCatalogue } from "../metrics";
 
 const iso = (value: Date | string) => new Date(value).toISOString();
 const notFound = () => new ApiError(404, "NOT_FOUND", "Resource not found.");
@@ -16,7 +17,7 @@ const gardenSelect = `SELECT g.id, g.name,
   (SELECT count(*)::int FROM grove.plants p WHERE p.garden_id=g.id) AS "plantCount",
   (SELECT count(*)::int FROM grove.devices d JOIN grove.plants p ON p.id=d.plant_id WHERE p.garden_id=g.id) AS "deviceCount"
   FROM grove.gardens g`;
-const reading = (row: any): ReadingData => ({ plantId: row.plant_id, deviceId: row.device_id,
+const reading = (row: any): ReadingData => calibrate({ plantId: row.plant_id, deviceId: row.device_id,
   measuredAt: iso(row.measured_at), measurements: row.measurements });
 
 export class PostgresBackend implements BackendAdapter {
@@ -58,7 +59,7 @@ export class PostgresBackend implements BackendAdapter {
       WHERE g.id=$1 AND g.account_id=$2 ORDER BY p.id`, [gardenId, identity.accountId])).rows.map(reading);
     const insights = (await this.getInsights(identity, gardenId))?.insights;
     if (!insights) return null; // Concurrent deletion.
-    return { garden, plants, devices, latestReadings, insights, meta: this.meta() };
+    return { garden, plants, devices, latestReadings, insights, metrics: metricCatalogue, meta: this.meta() };
   }
   async getReadings(identity: BackendIdentity, plantId: string, range: ReadingRange): Promise<ReadingsData | null> {
     if (!await this.hasPlant(identity, plantId)) return null;
@@ -81,6 +82,7 @@ export class PostgresBackend implements BackendAdapter {
     const insights: InsightsData = saved ? { ...saved,
       items: saved.items.filter(item => item.plantId === null || ids.has(item.plantId)),
       overviews: saved.overviews?.filter(item => ids.has(item.plantId)),
+      blocks: saved.blocks?.filter(block => !("plantId" in block) || !block.plantId || ids.has(block.plantId)),
     } : { gardenId, status: "unavailable", generatedAt: null, items: [] };
     const stale = state?.dirty || (snapshot && this.clock() - snapshot.generatedAt >= 3600000);
     return { insights: { ...insights, generation: { state: state?.failure ? "failed" : saved ? stale ? "stale" : "ready" : "unavailable",

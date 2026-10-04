@@ -5,6 +5,7 @@ import { accountFixtures, fixtureReading, HOUR, REPORT_DELAY } from "./fixtures"
 import type { MemoryData, MemoryWriteData, MutationData } from "./agent/schemas";
 import { ApiError } from "./errors";
 import type { IngestData, IngestResult } from "./ingestion";
+import { calibrate, metricCatalogue } from "./metrics";
 
 export interface InsightSnapshot {
   revision: string; generatedAt: number; dirty: boolean; version?: number;
@@ -85,8 +86,9 @@ export class MockBackend implements BackendAdapter {
         ...device, lastSeenAt: reports ? new Date(latestAt).toISOString() : null,
       })),
       latestReadings: plants.flatMap(plant => plant.profiles && device
-        ? [fixtureReading(plant, device.id, latestAt, this.referenceTime)] : []),
+        ? [calibrate(fixtureReading(plant, device.id, latestAt, this.referenceTime))] : []),
       insights: this.insights(data, gardenId),
+      metrics: metricCatalogue,
       meta: this.meta(now),
     };
   }
@@ -102,7 +104,7 @@ export class MockBackend implements BackendAdapter {
       const end = Math.min(Date.parse(range.to), this.latestAt(now));
       // At most 169 hourly points in the validated seven-day inclusive range.
       for (let at = Math.ceil(Date.parse(range.from) / HOUR) * HOUR; at <= end; at += HOUR) {
-        readings.push(fixtureReading(plant, device.id, at, this.referenceTime));
+        readings.push(calibrate(fixtureReading(plant, device.id, at, this.referenceTime)));
       }
     }
     return { plantId, ...range, readings, meta: this.meta(now) };

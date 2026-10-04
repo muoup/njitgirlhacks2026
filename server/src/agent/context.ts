@@ -17,6 +17,9 @@ export function summarize(readings: ReadingData[]) {
     metric: key.split("\0")[0]!, unit: samples[0]!.unit, samples: samples.length,
     first: samples[0]!, last: samples.at(-1)!,
     min: Math.min(...samples.map(sample => sample.value)), max: Math.max(...samples.map(sample => sample.value)),
+    // When the extremes were reached, so that a chart can point at them.
+    lowest: samples.reduce((low, sample) => sample.value < low.value ? sample : low),
+    highest: samples.reduce((high, sample) => sample.value > high.value ? sample : high),
     mean: samples.reduce((sum, sample) => sum + sample.value, 0) / samples.length,
     change: samples.at(-1)!.value - samples[0]!.value,
   }));

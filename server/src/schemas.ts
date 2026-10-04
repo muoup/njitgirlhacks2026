@@ -1,5 +1,6 @@
 import { t, type Static } from "elysia";
-import { Generation, PlantOverview } from "./agent/schemas";
+import { Generation, PlantOverview, Stop } from "./agent/schemas";
+import { Block } from "./agent/blocks";
 
 export const Id = t.String({ minLength: 1 });
 export const Timestamp = t.String({ format: "date-time" });
@@ -29,6 +30,21 @@ export const Measurement = t.Object({
   metric: t.String({ description: "Metric identifier; sensor-specific naming is provisional." }),
   value: t.Number(),
   unit: t.String(),
+  word: t.Optional(t.String({ description: "Where the value sits on the metric's scale, in a plain word such as Dry." })),
+});
+export const MetricInfo = t.Object({
+  metric: t.String(),
+  label: t.String({ description: "What the grove calls this metric." }),
+  unit: t.String({ description: "The unit values are shown in; empty for a plain number." }),
+  tier: t.Union([t.Literal("core"), t.Literal("detail")], {
+    description: "Core metrics stand for a plant at a glance; detail ones belong with its full history." }),
+  glance: t.Union([t.Literal("word"), t.Literal("value")], {
+    description: "Whether the word or the number stands for a reading where there is room for only one." }),
+  scale: t.Optional(t.Object({
+    low: t.Number(), high: t.Number(),
+    healthy: t.Object({ from: t.Number(), to: t.Number() }),
+    bands: t.Array(t.Object({ from: t.Number(), word: t.String() }), { minItems: 1 }),
+  }, { description: "The range a meter spans, the part of it a plant is well in, and the word for each stretch." })),
 });
 export const Reading = t.Object({
   plantId: Id,
@@ -46,6 +62,8 @@ export const Insights = t.Object({
   generatedAt: t.Union([Timestamp, t.Null()]),
   items: t.Array(InsightItem),
   overviews: t.Optional(t.Array(PlantOverview)),
+  blocks: t.Optional(t.Array(Block, { description: "What to draw beside the garden's own notes. Each names its plant." })),
+  layout: t.Optional(t.Array(Stop, { description: "The order of stops on the dashboard. Absent when the page should decide." })),
   generation: t.Optional(Generation),
 });
 export const Meta = t.Object({
@@ -63,6 +81,7 @@ export const DashboardResponse = t.Object({
   devices: t.Array(Device),
   latestReadings: t.Array(Reading),
   insights: Insights,
+  metrics: t.Array(MetricInfo, { description: "The metric catalogue, in display order." }),
   meta: Meta,
 });
 export const ReadingsQuery = t.Object({
@@ -95,6 +114,7 @@ export type PlantData = Static<typeof Plant>;
 export type PlantStatusData = Static<typeof PlantStatus>;
 export type DeviceData = Static<typeof Device>;
 export type MeasurementData = Static<typeof Measurement>;
+export type MetricInfoData = Static<typeof MetricInfo>;
 export type InsightItemData = Static<typeof InsightItem>;
 export type MetaData = Static<typeof Meta>;
 export type ReadingData = Static<typeof Reading>;

@@ -102,7 +102,7 @@ export function MentorProvider({ children }: { children: ReactNode }) {
           conversationId: serverConversation.current, requestId: createRequestId() });
         if (conversation.current === during) {
           serverConversation.current = response.conversationId;
-          setThread(current => [...current, { from: persona, text: response.reply },
+          setThread(current => [...current, { from: persona, text: response.reply, blocks: response.blocks, plants: response.plants },
             ...response.pendingActions.map(action => ({ from: persona, text: "", action }))]);
           notifyDataChanged();
         }

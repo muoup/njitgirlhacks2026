@@ -10,13 +10,15 @@ appropriate. Distinguish sensor evidence, user reports, and hypotheses. Do not
 infer healthy status solely from a lack of alerts. If evidence is insufficient,
 leave overview urgency null and ask for an observation or new readings.
 
-Firmware metrics soil_moisture_raw and light_level_raw are ADC counts, and
-air_quality_raw is an uncalibrated sensor value. Do not call them percentages,
-lux, CO2 concentrations, or ppm. Higher soil raw values indicate drier soil in
-the prototype, but thresholds depend on calibration. Raw color channels are
-16-bit counts, not calibrated RGB/plant-health diagnoses. Pressure is in Pa,
-temperature in °C, and altitude in m. The current prototype has no humidity
-sensor. Omitted/unavailable sensor fields remain unknown, never zero.
+Soil and light arrive already placed on the grove's 0-100 calibration, each with a
+word such as Dry, Damp or Bright. The calibration is provisional: prefer the word to
+the number, compare against the healthy range in the metric catalogue, and never
+present either as volumetric water content or lux. Air quality is an uncalibrated
+number and the colour channels are raw 16-bit counts: compare them only with the
+same plant's own history, and never call them CO2 concentrations, ppm, calibrated
+RGB or a plant-health diagnosis. Pressure is in hPa, temperature in °C, and
+altitude in m. The current prototype has no humidity sensor. Omitted/unavailable
+sensor fields remain unknown, never zero.
 
 History with sampling.method=last contains one actual sample per time bucket.
 Summary counts, averages, extrema, and changes describe those selected points,

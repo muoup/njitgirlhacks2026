@@ -14,6 +14,7 @@ import { GeminiRunner, type AgentRunner } from "./agent/runner";
 import { logFailure } from "./diagnostics";
 import { IngestRequest, IngestResponse } from "./ingestion";
 import { hashKey } from "./storage/keys";
+import { metricCatalogue } from "./metrics";
 
 const errorResponses = {
   400: s.ErrorResponse,
@@ -103,9 +104,9 @@ export async function createApp(options: {
   } as Documentation;
 
   const app = new Elysia({ normalize: false, serve: {
-    // Gemini runs can take up to 60 seconds before producing a response. Bun's
-    // default 10-second idle timeout otherwise drops the socket mid-request.
-    idleTimeout: 90,
+    // A Gemini run can take up to 60 seconds, and an insight refresh may run twice to
+    // correct itself. Bun's default 10-second idle timeout would drop the socket mid-request.
+    idleTimeout: 150,
     maxRequestBodySize: 16 * 1024,
   } })
     .use(cors({
@@ -276,6 +277,11 @@ export async function createApp(options: {
         query: t.Object({ gardenId: s.Id }),
         response: { 200: s.DashboardResponse },
         detail: { tags: ["Dashboard"], summary: "Hydrate one garden dashboard", operationId: "getDashboard" },
+      })
+      .get("/metrics", () => ({ metrics: metricCatalogue }), {
+        response: { 200: t.Object({ metrics: t.Array(s.MetricInfo) }) },
+        detail: { tags: ["Readings"], summary: "List the metrics the grove knows", operationId: "listMetrics",
+          description: "What each metric is called, its display unit, and the scale and healthy range it is drawn on. The dashboard response carries the same list." },
       })
       .get("/plants/:id/readings", async ({ identity, params, query }) => {
         const from = Date.parse(query.from);

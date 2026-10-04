@@ -1,5 +1,5 @@
 /** Who answers in the mentor's chat. The two differ in voice, not in what they know. */
-import type { PendingAction } from "@/lib/api";
+import type { ChatResponse, PendingAction } from "@/lib/api";
 export type Persona = "gnome" | "wizard";
 
 export interface Mentor {
@@ -43,4 +43,7 @@ export interface ChatMessage {
   from: "you" | Persona;
   text: string;
   action?: PendingAction;
+  /** What the mentor asked to have drawn under what they said, and the plants it is about. */
+  blocks?: ChatResponse["blocks"];
+  plants?: ChatResponse["plants"];
 }
