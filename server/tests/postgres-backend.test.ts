@@ -3,6 +3,7 @@ import { postgresFixture } from "./postgres-fixture";
 import { authDatabase, migrate, checkDatabase } from "../src/storage/database";
 import { PostgresBackend } from "../src/storage/postgres-backend";
 import { createApp } from "../src/app";
+import { setPassword } from "../src/auth";
 import { loadConfig } from "../src/config";
 import { AgentService } from "../src/agent/service";
 import type { BackendIdentity } from "../src/backend";
@@ -177,6 +178,16 @@ describe("PostgreSQL-backed app", () => {
     expect((await request("/api/v1/ingest/readings", { ...sample, sampleId: "boot-abcd:2" }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(401);
     key = replacement;
     expect((await request("/api/v1/ingest/readings", { ...sample, sampleId: "boot-abcd:2" }, "", "POST", { Authorization: `Bearer ${key}` })).status).toBe(201);
+  });
+  test("a forgotten password can be replaced from the server, leaving sessions signed in", async () => {
+    const signIn = (password: string) => request("/api/auth/sign-in/email", { email: "bob@fixture.example", password }, "");
+    await expect(setPassword(runtime.auth, "nobody@fixture.example", "ReplacedPassword2026!")).rejects.toThrow("No account");
+    await expect(setPassword(runtime.auth, "bob@fixture.example", "short")).rejects.toThrow("characters");
+    expect((await signIn("FixturePassword2026!")).status).toBe(200);
+    await setPassword(runtime.auth, " Bob@Fixture.example ", "ReplacedPassword2026!");
+    expect((await signIn("FixturePassword2026!")).status).toBe(401);
+    expect((await signIn("ReplacedPassword2026!")).status).toBe(200);
+    expect((await request("/api/v1/me", undefined, bobCookie)).status).toBe(200);
   });
   test("generated insights persist and cron rediscovers accounts after service recreation", async () => {
     let calls = 0;

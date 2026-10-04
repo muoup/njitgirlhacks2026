@@ -10,6 +10,7 @@
     "test": "bun test",
     "openapi:generate": "bun scripts/generate-openapi.ts",
     "agent:check": "bun scripts/check-agent.ts",
+    "auth:password": "bun scripts/password.ts",
     "db:connect": "bun scripts/database.ts connect",
     "db:migrate": "bun scripts/database.ts migrate",
     "db:check": "bun scripts/database.ts check",

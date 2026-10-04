@@ -25,6 +25,7 @@ Defaults: frontend http://localhost:3000, server http://localhost:3001.
 - Generate a local specification: `bun run openapi:generate` (no DB/model calls).
 - Checks: `bun run typecheck`, `bun test`.
 - Database setup: `bun run db:migrate`, `bun run db:check`, `bun run db:timescale`.
+- Forgotten password: `bun run auth:password EMAIL` asks for a new one and stores it.
 
 ## Storage and authentication
 
@@ -50,7 +51,9 @@ Google sign-in is optional and uses GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET for 
 Web application OAuth client. Register the public API's
 `/api/auth/callback/google` URL. Gemini credentials are separate. Email/password
 signup/login works without Google. Verification/password-reset email delivery is
-not configured.
+not configured. A forgotten password is replaced from the server instead, with
+`bun run auth:password EMAIL`: it needs `server/.env`, so only whoever runs the
+server can use it. An account made with Google gains a password this way.
 
 In fixture mode, auth/accounts/sessions disappear on restart. Development seeds
 `demo@grove.local` / `GroveDemo2026!` unless SEED_DEMO_ACCOUNT=false. The public demo
