@@ -18,23 +18,52 @@ export function Plank({ cut }: { cut: string }) {
 
 const BOARD =
   "grove-board relative isolate flex min-w-0 items-center gap-2 px-6 py-2.5 font-brush text-2xl leading-none font-normal text-grove-parchment sm:px-8 sm:text-3xl";
-const BOARD_TILT = { "--tilt": "-1.2deg", "--nudge": "0px" } as CSSProperties;
-const BOARD_CUT = "polygon(0 8%, 98% 0, 100% 90%, 2% 100%)";
+// Most of the lean is the board turning, so the words on it lean too; the cut only roughens the edges.
+const BOARD_TILT = { "--tilt": "-2.2deg", "--nudge": "0px" } as CSSProperties;
+const BOARD_CUT = "polygon(0 5%, 99% 0, 100% 93%, 1% 100%)";
+
+/**
+ * The site's name in the top left corner of a signed-in page. Between a phone and a wide
+ * window it takes two lines, which leaves the row to the boards hanging beside it.
+ */
+export function Wordmark({ to }: { to: string }) {
+  return (
+    <Link to={to} className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
+      loam <span className="sm:max-lg:block">gnome</span>
+    </Link>
+  );
+}
 
 /**
  * A board hanging on two ropes from the top centre of the grove. `beside` is a small board
- * hung next to it, and `children` is the line under it.
+ * hung to its right, `opposite` one hung to its left, and `children` is the line under it.
  */
-function Hanging({ board, beside, children }: { board: ReactNode; beside?: ReactNode; children?: ReactNode }) {
+function Hanging({
+  board,
+  beside,
+  opposite,
+  children,
+}: {
+  board: ReactNode;
+  beside?: ReactNode;
+  opposite?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
     // On a phone the board hangs lower, under the wordmark and the name tag, so it can use the full width.
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center px-4 sm:px-44">
-      {/* Kept narrower than the row on a phone, which leaves room for the small board beside it. */}
-      <div className={cn("pointer-events-auto relative max-w-full pt-14 sm:pt-5", beside && "max-sm:max-w-[calc(100%-7rem)]")}>
+    <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center px-4 sm:px-44 lg:px-72">
+      {/* Kept narrower than the row on a phone, which leaves room for a small board on either side. */}
+      <div
+        className={cn(
+          "pointer-events-auto relative max-w-full pt-14 sm:pt-5",
+          (beside || opposite) && "max-sm:max-w-[calc(100%-7rem)]",
+        )}
+      >
         {["left-[18%]", "right-[18%]"].map(side => (
-          <span key={side} aria-hidden="true" className={cn("absolute top-0 h-[3.75rem] w-0.5 bg-[#8a7355] sm:h-6", side)} />
+          <span key={side} aria-hidden="true" className={cn("absolute top-0 h-16 w-0.5 bg-[#8a7355] sm:h-7", side)} />
         ))}
         {board}
+        {opposite && <div className="absolute right-full bottom-0.5 mr-3">{opposite}</div>}
         {beside && <div className="absolute bottom-0.5 left-full ml-3">{beside}</div>}
       </div>
       {children}
@@ -48,24 +77,28 @@ export function GardenSign({
   gardenId,
   onSelect,
   beside,
+  opposite,
   children,
 }: {
   gardens: Garden[];
   gardenId: string | undefined;
   onSelect: (gardenId: string) => void;
   beside?: ReactNode;
+  opposite?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <Hanging
       beside={beside}
+      opposite={opposite}
       board={
         <Select value={gardenId ?? ""} onValueChange={onSelect}>
           {/* The tilt is on the board inside, not the trigger: the list is placed against the trigger's box, which has to keep still. */}
           <SelectPrimitive.Trigger aria-label="Garden" className={cn("flex max-w-full cursor-pointer border-0 bg-transparent p-0", FOCUS)}>
             <span className={BOARD} style={BOARD_TILT}>
               <Plank cut={BOARD_CUT} />
-              <span className="truncate">
+              {/* Padded, since cutting a long name short also cuts whatever hangs below the line. */}
+              <span className="-my-1.5 truncate py-1.5">
                 <SelectPrimitive.Value placeholder="Choose a garden" />
               </span>
               <SelectPrimitive.Icon asChild>
@@ -93,10 +126,21 @@ export function GardenSign({
 }
 
 /** A page's name on the hanging board, as its heading. */
-export function TitleSign({ title, beside, children }: { title: string; beside?: ReactNode; children?: ReactNode }) {
+export function TitleSign({
+  title,
+  beside,
+  opposite,
+  children,
+}: {
+  title: string;
+  beside?: ReactNode;
+  opposite?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
     <Hanging
       beside={beside}
+      opposite={opposite}
       board={
         <h1 className={cn(BOARD, "m-0")} style={BOARD_TILT}>
           <Plank cut={BOARD_CUT} />
@@ -111,9 +155,22 @@ export function TitleSign({ title, beside, children }: { title: string; beside?:
 
 /**
  * A small board on its own rope beside the sign, leading to another page. Only the icon
- * shows on narrow screens; `label` is always its name, and `short` is the word painted on it.
+ * shows until the window is wide; `label` is always its name, and `short` is the word painted on it.
+ * `tilt` is how it hangs: a board on the sign's left leans the other way.
  */
-export function SideBoard({ to, label, short, children }: { to: string; label: string; short: string; children: ReactNode }) {
+export function SideBoard({
+  to,
+  label,
+  short,
+  tilt = "2.5deg",
+  children,
+}: {
+  to: string;
+  label: string;
+  short: string;
+  tilt?: string;
+  children: ReactNode;
+}) {
   return (
     <Link
       to={to}
@@ -122,12 +179,12 @@ export function SideBoard({ to, label, short, children }: { to: string; label: s
         "grove-board relative isolate flex items-center gap-1.5 px-3 py-2 font-brush text-xl leading-none text-grove-parchment no-underline",
         FOCUS,
       )}
-      style={{ "--tilt": "2.5deg", "--nudge": "0px" } as CSSProperties}
+      style={{ "--tilt": tilt, "--nudge": "0px" } as CSSProperties}
     >
       <span aria-hidden="true" className="absolute bottom-full left-1/2 -z-10 h-40 w-0.5 bg-[#8a7355]" />
       <Plank cut="polygon(0 0, 97% 6%, 100% 100%, 3% 92%)" />
       {children}
-      <span className="hidden md:inline">{short}</span>
+      <span className="hidden lg:inline">{short}</span>
     </Link>
   );
 }

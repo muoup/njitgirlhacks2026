@@ -8,6 +8,10 @@ import type {
   NewPlantData as NewPlant, ApiKeyData as ApiKey, GardenResult as GardenResponse,
   ApiKeyResult as ApiKeyResponse, PlantedResult as PlantedResponse,
 } from "../../../../server/src/schemas";
+import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
+  PendingActionData as PendingAction, DecisionData as DecisionResponse,
+  RefreshData as RefreshResponse, OverviewData as PlantOverview } from "../../../../server/src/agent/schemas";
+export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, RefreshResponse, PlantOverview };
 
 export type {
   Garden, Plant, PlantStatus, Device, Measurement, Reading, InsightItem,
@@ -34,6 +38,9 @@ export function notBuilt(error: unknown) {
 }
 
 export interface GroveApi {
+  askMentor(request: ChatRequest): Promise<ChatResponse>;
+  decideAgentAction(id: string, decision: "approve" | "cancel"): Promise<DecisionResponse>;
+  refreshInsights(): Promise<RefreshResponse>;
   listGardens(): Promise<GardensResponse>;
   getDashboard(gardenId: string): Promise<DashboardResponse>;
   /** The BFF accepts an ordered range of at most seven days. */

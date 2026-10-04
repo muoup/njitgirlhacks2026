@@ -8,11 +8,15 @@
     "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "openapi:generate": "bun scripts/generate-openapi.ts"
+    "openapi:generate": "bun scripts/generate-openapi.ts",
+    "agent:check": "bun scripts/check-agent.ts"
   },
   "dependencies": {
+    "@ai-sdk/google-vertex": "^5.0.101",
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/openapi": "^1.4.16",
+    "@sinclair/typebox": "^0.34.52",
+    "ai": "^7.0.127",
     "better-auth": "^1.7.7",
     "elysia": "^1.4.30"
   },

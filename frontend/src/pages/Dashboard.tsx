@@ -1,8 +1,8 @@
-import { Shovel } from "lucide-react";
+import { MessageCircle, Shovel } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 
-import { AccountTag, GardenSign, SideBoard } from "@/components/dashboard/BandHeader";
+import { AccountTag, GardenSign, SideBoard, Wordmark } from "@/components/dashboard/BandHeader";
 import { GroveBand } from "@/components/dashboard/GroveBand";
 import { ForestFloor } from "@/components/dashboard/ForestFloor";
 import { defaultLayout, type WidgetSpec } from "@/components/dashboard/layout";
@@ -75,7 +75,10 @@ function GardenBody({ view }: { view: DashboardView }) {
         }))}
       />
       <p className="mt-14 mb-0 text-xs text-muted-foreground">
-        {dashboard.meta.source === "mock" && "Sample data, not live sensor readings or generated insights. "}
+        {dashboard.meta.source === "mock" && "Sample sensor readings. "}
+        {dashboard.insights.generation?.state === "ready" && "Generated garden insights. "}
+        {dashboard.insights.generation?.state === "refreshing" && "Refreshing garden insights. "}
+        {(dashboard.insights.generation?.state === "stale" || dashboard.insights.generation?.state === "failed") && "Garden insights need a refresh. "}
         Updated {timeAgo(dashboard.meta.hydratedAt)}.
       </p>
     </Body>
@@ -83,8 +86,8 @@ function GardenBody({ view }: { view: DashboardView }) {
 }
 
 const TALLY: { urgency: Urgency; one: string; many: string }[] = [
-  { urgency: "act", one: "needs you", many: "need you" },
-  { urgency: "watch", one: "to check on", many: "to check on" },
+  { urgency: "act", one: "calls for you", many: "call for you" },
+  { urgency: "watch", one: "to look in on", many: "to look in on" },
 ];
 
 /** The line under the garden sign: how many plants want something, and how fresh the numbers are. */
@@ -105,7 +108,7 @@ function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overv
       {counts.length === 0 && assessed && (
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="size-2.5 rotate-45 bg-grove-ok" />
-          Nothing needs you
+          Nothing calls for you
         </span>
       )}
       {heard && <span className="font-normal">heard {timeAgo(heard)}</span>}
@@ -186,14 +189,17 @@ function SignedIn({ user }: { user: SessionUser }) {
           selectedId={plantId}
           onSelect={selectPlant}
         />
-        <Link to="/" className="absolute top-4 left-5 font-brush text-4xl leading-none text-grove-parchment no-underline sm:left-8">
-          loam
-        </Link>
+        <Wordmark to="/" />
         {gardenList.length > 0 && (
           <GardenSign
             gardens={gardenList}
             gardenId={garden?.id}
             onSelect={selectGarden}
+            opposite={
+              <SideBoard to="/mentor" label="Ask the mentor" short="Mentor" tilt="-2.5deg">
+                <MessageCircle aria-hidden="true" className="size-5" />
+              </SideBoard>
+            }
             beside={
               <SideBoard to="/shed" label="Potting shed" short="Shed">
                 <Shovel aria-hidden="true" className="size-5" />

@@ -31,7 +31,7 @@ export function CompactReadings({ reading, className }: { reading: Reading | und
   );
 }
 
-/** "Soil moisture 53.1%, temperature 23.4 °C": the same reading in words, for labels. */
+/** "Soil damp 53.1%, warmth 23.4 °C": the same reading in words, for labels. */
 export function readingInWords(reading: Reading | undefined) {
   if (!reading || reading.measurements.length === 0) return "no readings";
   return reading.measurements

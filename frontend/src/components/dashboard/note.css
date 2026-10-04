@@ -1,0 +1,61 @@
+/*
+ * A note is a bare slate with a thin edge. Nothing on the slate moves or shines; the vine
+ * outside it does the decorating.
+ */
+.note {
+  --light: var(--grove-mist);
+  --vine: #3c6f45;
+  --vine-hi: #4a8452;
+  --vine-lo: #2c5435;
+}
+
+/* The edge is the slate's own shape, showing round a face set just inside it. */
+.note-edge {
+  padding: 1.5px;
+  background: color-mix(in srgb, var(--grove-mist) 34%, var(--grove-front));
+  clip-path: var(--shape);
+}
+
+.note-face {
+  background: #10231a;
+  clip-path: var(--shape);
+}
+
+.note-stem {
+  fill: none;
+  stroke: var(--vine-lo);
+  stroke-width: 3.5;
+  stroke-linejoin: bevel;
+}
+
+/* Each leaf turns about the point where it joins the stem. */
+.note-leaf {
+  transform-origin: 0 0;
+  animation: note-sway 7s ease-in-out infinite alternate;
+}
+
+@keyframes note-sway {
+  from {
+    rotate: -7deg;
+  }
+  to {
+    rotate: 7deg;
+  }
+}
+
+.note-bloom {
+  transform-origin: 0 0;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--light) 55%, transparent));
+  animation: note-bloom 9s ease-in-out infinite alternate;
+}
+
+@keyframes note-bloom {
+  from {
+    rotate: -10deg;
+    scale: 0.94;
+  }
+  to {
+    rotate: 10deg;
+    scale: 1.06;
+  }
+}

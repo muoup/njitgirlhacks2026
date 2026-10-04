@@ -1,0 +1,161 @@
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
+
+import { failureMessage } from "@/components/shed/action";
+import { auth } from "@/lib/auth";
+import { api, ApiError } from "@/lib/api";
+import { notifyDataChanged } from "@/lib/data-events";
+import { type ChatMessage, MENTORS, type Persona } from "./mentors";
+
+interface MentorChat {
+  persona: Persona;
+  thread: ChatMessage[];
+  draft: string;
+  setDraft: (draft: string) => void;
+  /** Whether a reply is on its way. */
+  busy: boolean;
+  error: string | null;
+  /** Whether anything has been asked, so there is something to lose by starting again. */
+  started: boolean;
+  /** Changes who answers. The newcomer starts a conversation of their own. */
+  change: (persona: Persona) => void;
+  /** Starts again with the same mentor, who remembers nothing of what was said. */
+  clear: () => void;
+  ask: (question: string) => void;
+  decide: (id: string, decision: "approve" | "cancel") => void;
+  refresh: () => void;
+  /** Whether the sidebar is out, on the pages that have one. */
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}
+
+const Context = createContext<MentorChat | null>(null);
+
+function fresh(persona: Persona): ChatMessage[] {
+  return [{ from: persona, text: MENTORS[persona].greeting }];
+}
+
+/**
+ * One conversation with the mentor, kept above the pages so the mentor's own page and the
+ * sidebar on every other page show the same one. It lasts until the page is reloaded or
+ * whoever is signed in changes.
+ */
+export function MentorProvider({ children }: { children: ReactNode }) {
+  const [persona, setPersona] = useState<Persona>("gnome");
+  const [thread, setThread] = useState(() => fresh("gnome"));
+  const [draft, setDraft] = useState("");
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Counts conversations, so a reply to one that has since been cleared is dropped.
+  const conversation = useRef(0);
+  const serverConversation = useRef<string | undefined>(undefined);
+  const sending = useRef(false);
+
+  const session = auth.useSession();
+  const who = session.status === "signed-in" ? session.user.email : null;
+  useEffect(() => {
+    if (!who) return;
+    return () => {
+      setPersona("gnome");
+      startAgain("gnome");
+      setDraft("");
+      setOpen(false);
+    };
+  }, [who]);
+
+  function run(during: number, work: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    void work().catch(error => {
+      if (during === conversation.current) setError(failureMessage(error));
+    }).finally(() => {
+      if (during === conversation.current) { setBusy(false); sending.current = false; }
+    });
+  }
+
+  function startAgain(withPersona: Persona) {
+    conversation.current += 1;
+    serverConversation.current = undefined;
+    sending.current = false;
+    setBusy(false);
+    setError(null);
+    setThread(fresh(withPersona));
+  }
+
+  function change(next: Persona) {
+    setPersona(next);
+    startAgain(next);
+  }
+
+  function ask(question: string) {
+    const text = question.trim();
+    if (!text || sending.current) return;
+    const asked: ChatMessage[] = [...thread, { from: "you", text }];
+    const during = conversation.current;
+    setThread(asked);
+    setDraft("");
+    sending.current = true;
+    run(during, async () => {
+      try {
+        const response = await api.askMentor({ persona, message: text,
+          conversationId: serverConversation.current, requestId: crypto.randomUUID() });
+        if (conversation.current === during) {
+          serverConversation.current = response.conversationId;
+          setThread(current => [...current, { from: persona, text: response.reply },
+            ...response.pendingActions.map(action => ({ from: persona, text: "", action }))]);
+          notifyDataChanged();
+        }
+      } catch (error) {
+        if (conversation.current !== during) return;
+        if (error instanceof ApiError && error.status === 404) serverConversation.current = undefined;
+        throw error;
+      }
+    });
+  }
+
+  function decide(id: string, decision: "approve" | "cancel") {
+    if (sending.current) return;
+    const during = conversation.current;
+    sending.current = true;
+    run(during, async () => {
+      try {
+        const { action } = await api.decideAgentAction(id, decision);
+        if (during !== conversation.current) return;
+        setThread(current => current.map(message => message.action?.id === id ? { ...message, action } : message));
+        if (action.status === "succeeded") notifyDataChanged();
+      } catch (error) { if (during === conversation.current) throw error; }
+    });
+  }
+
+  function refresh() {
+    if (sending.current) return;
+    const during = conversation.current;
+    sending.current = true;
+    run(during, async () => {
+      try {
+        await api.refreshInsights();
+        if (during !== conversation.current) return;
+        notifyDataChanged();
+        setThread(current => [...current, { from: persona, text: "Garden insights were refreshed." }]);
+      } catch (error) { if (during === conversation.current) throw error; }
+    });
+  }
+
+  return (
+    <Context
+      value={{
+        persona, thread, draft, setDraft, busy, error, change, ask, decide, refresh, open, setOpen,
+        started: thread.some(message => message.from === "you"),
+        clear: () => startAgain(persona),
+      }}
+    >
+      {children}
+    </Context>
+  );
+}
+
+export function useMentor() {
+  const chat = useContext(Context);
+  if (!chat) throw new Error("useMentor needs a MentorProvider above it");
+  return chat;
+}

@@ -24,6 +24,9 @@ export function createBffApi(baseUrl: string): GroveApi {
   const garden = (gardenId: string) => `/gardens/${encodeURIComponent(gardenId)}`;
 
   return {
+    askMentor: input => request("/chat", "POST", input),
+    decideAgentAction: (id, decision) => request(`/chat/actions/${encodeURIComponent(id)}/decision`, "POST", { decision }),
+    refreshInsights: () => request("/insights/refresh", "POST", {}),
     listGardens: () => request("/gardens"),
     getDashboard: gardenId => request(`/dashboard?${new URLSearchParams({ gardenId })}`),
     getPlantReadings: (plantId, from, to) =>

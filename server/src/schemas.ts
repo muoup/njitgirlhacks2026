@@ -1,4 +1,5 @@
 import { t, type Static } from "elysia";
+import { Generation, PlantOverview } from "./agent/schemas";
 
 export const Id = t.String({ minLength: 1 });
 export const Timestamp = t.String({ format: "date-time" });
@@ -44,6 +45,8 @@ export const Insights = t.Object({
   status: t.Union([t.Literal("unavailable"), t.Literal("ready")]),
   generatedAt: t.Union([Timestamp, t.Null()]),
   items: t.Array(InsightItem),
+  overviews: t.Optional(t.Array(PlantOverview)),
+  generation: t.Optional(Generation),
 });
 export const Meta = t.Object({
   source: t.Union([t.Literal("mock"), t.Literal("backend")]),

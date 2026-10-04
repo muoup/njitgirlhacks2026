@@ -7,6 +7,7 @@
 @theme inline {
   --font-sans: "Nunito Variable", "Segoe UI", Helvetica, sans-serif;
   --font-brush: "Caveat Brush", "Segoe Print", cursive;
+  --font-tale: "IM Fell English", Georgia, "Times New Roman", serif;
   --color-grove-sky: var(--grove-sky);
   --color-grove-front: var(--grove-front);
   --color-grove-ember: var(--grove-ember);

@@ -1,7 +1,16 @@
 import type { Measurement } from "@/lib/api";
 
-/** "soil_moisture" → "Soil moisture". Metric names come from the API and are shown as given. */
+// What the grove calls the metrics it knows. Each still says plainly what was measured.
+const METRIC_NAMES: Record<string, string> = {
+  soil_moisture: "Soil damp",
+  temperature: "Warmth",
+  humidity: "Air damp",
+};
+
+/** "soil_moisture" → "Soil damp". A metric the grove has no name for is shown as the API gives it: "Light level". */
 export function metricLabel(metric: string) {
+  const known = METRIC_NAMES[metric];
+  if (known) return known;
   const words = metric.replace(/[_-]+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

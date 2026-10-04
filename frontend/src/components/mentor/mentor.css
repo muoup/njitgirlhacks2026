@@ -1,0 +1,77 @@
+/*
+ * The mentors stand behind a board and look over its top edge. The one answering is up; the
+ * other has dropped out of the bottom of their window, which the board covers. Changing who
+ * answers drops one quickly and then brings the other up with a small bounce.
+ */
+.mentor-window {
+  /* Shut only at the bottom: a hat may sway out of the top and sides. */
+  clip-path: inset(-3rem -3rem 0 -3rem);
+}
+
+.mentor-figure {
+  transform: translateY(102%);
+  transition: transform 0.3s cubic-bezier(0.55, 0, 0.9, 0.45);
+}
+
+.mentor-figure[data-up="true"] {
+  transform: translateY(0);
+  transition: transform 0.55s cubic-bezier(0.3, 1.5, 0.6, 1) 0.26s;
+}
+
+/* A slow nod while they wait, turning about the feet. */
+.mentor-idle {
+  animation: mentor-idle 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes mentor-idle {
+  from {
+    transform: rotate(-1.2deg);
+  }
+  to {
+    transform: rotate(1.2deg);
+  }
+}
+
+/* The sidebar slides in from the right edge. While it is away it cannot be seen, reached or read out. */
+.mentor-dock {
+  transform: translateX(104%);
+  visibility: hidden;
+  transition:
+    transform 0.4s cubic-bezier(0.5, 0, 0.8, 0.4),
+    visibility 0s 0.4s;
+}
+
+.mentor-dock[data-open="true"] {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+
+/* While the sidebar is away, the mentor waits in the corner it slides out of. */
+.mentor-peek {
+  transition: translate 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s;
+}
+
+.mentor-peek[data-away="true"] {
+  translate: calc(100% + 2rem) 0;
+  visibility: hidden;
+  transition:
+    translate 0.25s ease-in,
+    visibility 0s 0.25s;
+}
+
+.mentor-peek-figure {
+  transform-origin: 50% 100%;
+  rotate: -4deg;
+  transition:
+    rotate 0.35s cubic-bezier(0.3, 1.5, 0.6, 1),
+    translate 0.35s cubic-bezier(0.3, 1.5, 0.6, 1);
+}
+
+.mentor-peek:hover .mentor-peek-figure,
+.mentor-peek:focus-visible .mentor-peek-figure {
+  rotate: -9deg;
+  translate: 0 -0.3rem;
+}

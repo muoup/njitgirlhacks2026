@@ -6,6 +6,7 @@ export interface Config {
   authSecret: string;
   google?: { clientId: string; clientSecret: string };
   seedDemo: boolean;
+  agent: { project?: string; location: string; scheduleEnabled: boolean };
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -36,5 +37,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
       : undefined,
     seedDemo: !production && env.SEED_DEMO_ACCOUNT !== "false",
+    agent: {
+      project: (env.GOOGLE_VERTEX_PROJECT || env.GOOGLE_CLOUD_PROJECT)?.trim() || undefined,
+      location: env.GOOGLE_VERTEX_LOCATION?.trim() || "global",
+      scheduleEnabled: env.AGENT_SCHEDULE_ENABLED !== "false",
+    },
   };
 }

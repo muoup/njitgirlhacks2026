@@ -1,37 +1,25 @@
-import type { DashboardResponse, Plant } from "@/lib/api";
-import type { RangeId } from "./readings";
+import type { DashboardResponse, Plant, PlantOverview as GeneratedOverview } from "@/lib/api";
 
 /** How much a plant wants from its owner: nothing, a look, or something done today. */
-export type Urgency = "ok" | "watch" | "act";
+export type Urgency = Exclude<GeneratedOverview["urgency"], null>;
 
 /** The pieces an overview can be built from. A calm plant needs none; an urgent one adds some. */
-export type OverviewBlock =
-  | { type: "readings" }
-  /** Without `metric`, the chart shows whichever metric moved most over the range. */
-  | { type: "chart"; range: RangeId; metric?: string };
+export type OverviewBlock = GeneratedOverview["blocks"][number];
 
 /**
  * One plant as the dashboard presents it. This is the shape a generated overview will have:
  * the agent chooses the urgency, the words and the blocks, and the page draws them.
  */
-export interface PlantOverview {
-  plantId: string;
-  /** `null` when nothing is known about the plant's health. */
-  urgency: Urgency | null;
-  headline: string;
-  /** Empty when there is nothing to say. */
-  text: string;
-  blocks: OverviewBlock[];
-}
+export type PlantOverview = GeneratedOverview;
 
 export const URGENCY: Record<Urgency, { label: string; color: string }> = {
-  ok: { label: "Fine", color: "var(--grove-ok)" },
-  watch: { label: "Keep an eye on it", color: "var(--grove-watch)" },
-  act: { label: "Needs you", color: "var(--grove-act)" },
+  ok: { label: "Thriving", color: "var(--grove-ok)" },
+  watch: { label: "Keep watch", color: "var(--grove-watch)" },
+  act: { label: "Calling for you", color: "var(--grove-act)" },
 };
 
 export function urgencyLabel(urgency: Urgency | null) {
-  return urgency ? URGENCY[urgency].label : "No status";
+  return urgency ? URGENCY[urgency].label : "No word yet";
 }
 
 export function isUrgent(overview: PlantOverview) {
@@ -39,18 +27,19 @@ export function isUrgent(overview: PlantOverview) {
 }
 
 function headline(plant: Plant, urgency: Urgency | null) {
-  if (urgency === "act") return `${plant.name} needs you.`;
-  if (urgency === "watch") return `Check on ${plant.name}.`;
-  if (urgency === "ok") return `${plant.name} is happy.`;
+  if (urgency === "act") return `${plant.name} calls for you.`;
+  if (urgency === "watch") return `Look in on ${plant.name}.`;
+  if (urgency === "ok") return `${plant.name} is thriving.`;
   return plant.name;
 }
 
 /**
- * Stands in for the agent until overviews are generated: builds them from what the BFF
+ * Uses generated overviews when available, otherwise builds them from what the BFF
  * already sends. A plant reported as needing care is urgent, a note asking for follow-up
  * makes one worth a look, and either earns its recent history on screen.
  */
 export function standInOverviews(dashboard: DashboardResponse): PlantOverview[] {
+  if (dashboard.insights.overviews) return dashboard.insights.overviews;
   return dashboard.plants.map(plant => {
     const notes = dashboard.insights.items
       .filter(item => item.plantId === plant.id)
@@ -69,6 +58,7 @@ export function standInOverviews(dashboard: DashboardResponse): PlantOverview[] 
       urgency,
       headline: headline(plant, urgency),
       text: notes.map(note => note.text).join(" "),
+      evidence: [],
       blocks: measured && (urgency === "act" || urgency === "watch") ? [{ type: "readings" }, { type: "chart", range: "7d" }] : [],
     };
   });

@@ -1,7 +1,9 @@
 import type {
-  DashboardData, GardensData, InsightsResult, ReadingRange, ReadingsData,
+  DashboardData, GardensData, InsightsResult, ReadingRange, ReadingsData, GardenResult, PlantedResult,
 } from "./schemas";
 import { accountFixtures, fixtureReading, HOUR, REPORT_DELAY } from "./fixtures";
+import type { MemoryData, MemoryWriteData, MutationData } from "./agent/schemas";
+import { ApiError } from "./errors";
 
 // Internal identity boundary, not a signed token. A backend token protocol is TBD.
 export interface BackendIdentity {
@@ -16,11 +18,16 @@ export interface BackendAdapter {
   getReadings(identity: BackendIdentity, plantId: string, range: ReadingRange): Promise<ReadingsData | null>;
   getInsights(identity: BackendIdentity, gardenId: string): Promise<InsightsResult | null>;
   hasPlant(identity: BackendIdentity, plantId: string): Promise<boolean>;
+  readMemory(identity: BackendIdentity): Promise<MemoryData>;
+  writeMemory(identity: BackendIdentity, input: MemoryWriteData): Promise<MemoryData>;
+  // The backend should use requestId as its idempotency key. Never pass keys to the model.
+  mutate(identity: BackendIdentity, action: MutationData, requestId: string): Promise<GardenResult | PlantedResult | void>;
 }
 
 // Replace this adapter once the teammate's HTTP API is agreed.
 export class MockBackend implements BackendAdapter {
   private readonly referenceTime: number;
+  private readonly memories = new Map<string, MemoryData>();
 
   constructor(private readonly clock: () => number = Date.now) {
     // Keep trend values stable across overlapping requests for this process.
@@ -94,5 +101,27 @@ export class MockBackend implements BackendAdapter {
 
   async hasPlant(identity: BackendIdentity, plantId: string): Promise<boolean> {
     return accountFixtures(identity.accountId).plants.some(item => item.id === plantId);
+  }
+
+  async readMemory(identity: BackendIdentity): Promise<MemoryData> {
+    return structuredClone(this.memories.get(identity.accountId) ?? {
+      markdown: "", revision: 0, updatedAt: null, source: "mock",
+    });
+  }
+
+  async writeMemory(identity: BackendIdentity, input: MemoryWriteData): Promise<MemoryData> {
+    const current = await this.readMemory(identity);
+    // Recheck after the await so concurrent compare-and-swap writes cannot both win.
+    const revision = this.memories.get(identity.accountId)?.revision ?? 0;
+    if (revision !== input.expectedRevision) throw new ApiError(409, "MEMORY_CONFLICT", "Memory changed; read it again before updating.");
+    if (input.markdown.length > 16_384) throw new ApiError(422, "INVALID_REQUEST", "Memory is limited to 16,384 characters.");
+    const next: MemoryData = { ...current, markdown: input.markdown, revision: revision + 1,
+      updatedAt: new Date(this.clock()).toISOString() };
+    this.memories.set(identity.accountId, next);
+    return structuredClone(next);
+  }
+
+  async mutate(_identity: BackendIdentity, _action: MutationData, _requestId: string): Promise<GardenResult | PlantedResult | void> {
+    throw new ApiError(501, "NOT_IMPLEMENTED", "Garden and plant changes await the backend protocol.");
   }
 }

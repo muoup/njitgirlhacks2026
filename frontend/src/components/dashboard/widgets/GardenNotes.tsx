@@ -1,7 +1,7 @@
 import { Radio } from "lucide-react";
 
 import { timeAgo } from "@/lib/format";
-import { Slip } from "../ParchmentNote";
+import { Note } from "../Note";
 import type { DashboardView } from "../view";
 
 /** What was written about the garden as a whole, and when its monitors were last heard from. */
@@ -40,9 +40,9 @@ export function GardenNotes({ view }: { view: DashboardView }) {
         <ul className="m-0 flex min-w-[min(100%,16rem)] flex-1 list-none flex-wrap items-start gap-5 p-0">
           {notes.map((note, index) => (
             <li key={note.id} className="max-w-sm">
-              <Slip title="The whole garden" tilt={index + 1}>
+              <Note title="Of the whole garden" cut={index + 1}>
                 {note.text}
-              </Slip>
+              </Note>
             </li>
           ))}
         </ul>

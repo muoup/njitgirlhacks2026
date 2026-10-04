@@ -257,6 +257,8 @@ export function Scene({ backdrop = false, children }: { backdrop?: boolean; chil
           <Planted shape="tuft" x={1126} y={810} scale={1.6} />
           <Planted shape="tuft" x={1372} y={808} scale={1.2} />
         </Stage>
+        {/* More ground under the bottom edge, so drifting up never uncovers what stands behind it. */}
+        <div className="absolute inset-x-0 -bottom-3 h-4 bg-grove-front" />
       </Layer>
     </div>
   );

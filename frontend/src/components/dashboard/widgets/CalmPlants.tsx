@@ -16,7 +16,7 @@ export function CalmPlants({ plantIds, view }: { plantIds: string[]; view: Dashb
   return (
     <section>
       <h2 className="m-0 font-brush text-4xl leading-none font-normal text-grove-parchment">
-        {allWell ? (others ? "The rest are happy." : "All is well.") : others ? "The rest of the garden" : "Your plants"}
+        {allWell ? (others ? "The rest are thriving." : "All is well.") : others ? "The rest of the garden" : "Your plants"}
       </h2>
       <ul className="m-0 mt-4 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-x-6 gap-y-3 p-0">
         {overviews.map(overview => {

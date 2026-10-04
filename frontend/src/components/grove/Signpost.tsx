@@ -3,7 +3,8 @@ import { Link } from "react-router";
 
 import { cn } from "@/lib/utils";
 
-function Board({
+/** A link as a board. It is placed against the signpost unless `className` says otherwise, and sized in em. */
+export function Board({
   href,
   variant,
   className,

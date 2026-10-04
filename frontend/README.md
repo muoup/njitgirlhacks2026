@@ -36,6 +36,17 @@ using type-only imports, so server code is not included in the browser bundle.
 Checks: `bun run typecheck` and `bun run build`. The build requires the same API
 URL setting. OpenAPI docs are served by the BFF at `http://localhost:3001/openapi`.
 
+The mentor page and dock share a real BFF conversation and account memory. Set
+`GEMINI_API_KEY` in `server/.env` and restart the BFF to enable replies. Missing
+configuration is shown as an error; there is no stand-in reply path. Garden/plant
+changes requested in chat appear as approval cards. The backend still returns
+`NOT_IMPLEMENTED` for those changes, even after approval.
+
+Use **Refresh garden insights** in the conversation to force the BFF's scheduled
+harness immediately. Generated overviews use the dashboard's existing renderer;
+until generation succeeds it uses the initial BFF insight/plant fields. See
+`../server/AGENT_PROTOCOL.md` for memory persistence and backend integration details.
+
 To run for production:
 
 ```bash
