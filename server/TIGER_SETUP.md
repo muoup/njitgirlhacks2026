@@ -102,6 +102,10 @@ After pulling a version that adds a migration, stop the server, run `bun run
 db:migrate` again and start it: startup refuses a database that is behind.
 `003_reading_color.sql` turns each stored sample's four colour channel counts
 into one hex `color` and marks the affected accounts' insights stale.
+`005_soil_scale.sql` follows the soil probe's measured scale (0 dry, 500 in
+water): a stored soil count above 500, which only sample data on the old guessed
+scale can be, moves to the count that shows the same percentage; counts of 500
+or less are kept; every account's insights are marked stale.
 
 `db:check` is read-only and prints `connected`, `schemaReady`, and the TimescaleDB
 extension version. `db:timescale` explicitly converts `grove.sensor_readings` into
@@ -184,7 +188,7 @@ firmware HTTPS client's trust configuration.
 2. Submit the documented sample with a real plant key; expect 201. Repeat it
    unchanged; expect 200 with `duplicate: true`.
 3. Open the plant dashboard/history and confirm all submitted metrics, units,
-   and monitor activity. Soil and light show on the provisional 0-100 calibration
+   and monitor activity. Soil and light show on the 0-100 calibration
    in `src/metrics.ts`; storage keeps the raw counts.
 4. Restart the server and confirm account login, gardens, key retrieval, readings,
    and previously generated insights still work.

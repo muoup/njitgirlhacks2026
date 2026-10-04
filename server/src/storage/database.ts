@@ -26,7 +26,7 @@ export async function transaction<T>(pool: Pool, work: (client: PoolClient) => P
   } finally { client.release(); }
 }
 
-export const migrationNames = ["001_auth.sql", "002_domain.sql", "003_reading_color.sql", "004_garden_place.sql"];
+export const migrationNames = ["001_auth.sql", "002_domain.sql", "003_reading_color.sql", "004_garden_place.sql", "005_soil_scale.sql"];
 export async function migrate(pool: Pool) {
   return transaction(pool, async client => {
     await client.query("SELECT pg_advisory_xact_lock(784516239)");

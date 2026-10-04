@@ -6,7 +6,7 @@ the firmware teammate's next step; this change does not alter that branch.
 
 | Sketch value | API metric | Unit | Notes |
 | --- | --- | --- | --- |
-| `analogRead(A0)` | `soil_moisture_raw` | `ADC` | Raw soil reading; larger means drier in the sketch |
+| `analogRead(A0)` | `soil_moisture_raw` | `ADC` | Raw soil reading; larger means wetter: 0 in dry air, about 500 in water |
 | `aqs.getValue()` | `air_quality_raw` | `raw` | Uncalibrated air-quality value, not CO2/ppm |
 | `analogRead(A2)` | `light_level_raw` | `ADC` | Raw light reading, not lux |
 | `spl.readPressure()` | `pressure` | `Pa` | Pressure |
@@ -37,7 +37,7 @@ Content-Type: application/json
   "sampleId": "boot-7f3c:42",
   "color": "#3d8040",
   "measurements": [
-    { "metric": "soil_moisture_raw", "value": 810, "unit": "ADC" },
+    { "metric": "soil_moisture_raw", "value": 120, "unit": "ADC" },
     { "metric": "air_quality_raw", "value": 50, "unit": "raw" },
     { "metric": "light_level_raw", "value": 400, "unit": "ADC" },
     { "metric": "pressure", "value": 101325, "unit": "Pa" },
@@ -98,7 +98,7 @@ echo
 curl -i 'https://api.YOUR_DOMAIN/api/v1/ingest/readings' \
   -H "Authorization: Bearer $PLANT_API_KEY" \
   -H 'Content-Type: application/json' \
-  --data '{"sampleId":"manual-boot-1:1","measurements":[{"metric":"soil_moisture_raw","value":810,"unit":"ADC"}]}'
+  --data '{"sampleId":"manual-boot-1:1","measurements":[{"metric":"soil_moisture_raw","value":120,"unit":"ADC"}]}'
 unset PLANT_API_KEY
 ```
 
@@ -118,7 +118,7 @@ Storage keeps exactly what the firmware sent. On the way out, `src/metrics.ts`
 turns each reading into what the dashboard and agent show: soil and light counts
 become positions on a 0-100 calibration with a word (Dry, Damp, Bright), pressure
 becomes hPa, and the other counts lose their unit. A sample's colour is returned
-beside its measurements as the reading's `color`. The calibration end points in
-that file are placeholders until the prototype's sensors are measured. The same
-file is the metric catalogue (label, tier, scale, healthy range) sent with the
+beside its measurements as the reading's `color`. Soil's end points in that file
+are measured (0 in dry air, 500 in water); light's are placeholders until the
+prototype's sensor is measured. The same file is the metric catalogue (label, tier, scale, healthy range) sent with the
 dashboard as `metrics`.

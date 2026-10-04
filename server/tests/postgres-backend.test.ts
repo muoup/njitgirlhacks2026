@@ -26,7 +26,7 @@ let gardenId: string;
 let plantId: string;
 let key: string;
 const sample: IngestData = { sampleId: "boot-abcd:1", color: "#3D8040", measurements: [
-  { metric: "soil_moisture_raw", value: 810, unit: "ADC" },
+  { metric: "soil_moisture_raw", value: 45, unit: "ADC" },
   { metric: "air_quality_raw", value: 50, unit: "raw" },
   { metric: "light_level_raw", value: 400, unit: "ADC" },
   { metric: "pressure", value: 101325, unit: "Pa" },
@@ -187,7 +187,7 @@ describe("PostgreSQL-backed app", () => {
     expect(result!.readings.length).toBeLessThanOrEqual(61);
     expect(result!.readings.at(-1)?.measuredAt).toBe(new Date(now).toISOString());
     expect(result!.sampling).toEqual({ method: "last", bucketSeconds: 60 });
-    // Stored as 810 ADC; shown on the soil calibration.
+    // Stored as 45 ADC; shown on the soil calibration.
     expect(result!.readings[0]?.measurements[0]).toEqual({ metric: "soil_moisture_raw", value: 9, unit: "%", word: "Dry" });
   });
   test("approval fingerprints are rechecked inside the mutation transaction", async () => {
