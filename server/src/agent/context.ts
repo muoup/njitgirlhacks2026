@@ -29,7 +29,7 @@ export interface AccountContext {
     garden: DashboardData["garden"]; plants: DashboardData["plants"];
     devices: DashboardData["devices"]; latestReadings: DashboardData["latestReadings"];
     source: "mock" | "backend";
-    histories: Array<{ plantId: string; digest: string; metrics: ReturnType<typeof summarize> }>;
+    histories: Array<{ plantId: string; digest: string; metrics: ReturnType<typeof summarize>; sampling?: { method: "last"; bucketSeconds: number } }>;
   }>;
 }
 
@@ -58,6 +58,7 @@ export async function buildContext(backend: BackendAdapter, identity: BackendIde
       const history = await backend.getReadings(identity, plant.id, range);
       const readings = history?.readings ?? [];
       histories.push({ plantId: plant.id, metrics: summarize(readings),
+        ...(history?.sampling ? { sampling: history.sampling } : {}),
         digest: new Bun.CryptoHasher("sha256").update(JSON.stringify(readings)).digest("hex") });
     }
     context.gardens.push({ garden: dashboard.garden, plants: dashboard.plants, devices: dashboard.devices,

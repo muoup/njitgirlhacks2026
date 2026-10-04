@@ -71,6 +71,7 @@ export class GeminiRunner implements AgentRunner {
         "Scheduled runs may update memory and generate insights, but may never propose or execute garden/plant changes.",
         "Use null urgency for insufficient evidence. Every scheduled output must cover each garden and plant exactly once.",
         "Insight notes must refer only to plants in their own garden. Chart metrics must exist in that plant's readings.",
+        "Raw ADC, AQ, and color counts are uncalibrated: never claim percentages, lux, CO2, or ppm. Sampling metadata means summaries describe selected points, not all raw samples.",
         "Each assessed overview needs evidence: metric, unit, and from/to timestamps within that plant's supplied history. Unmeasured plants have no evidence or blocks.",
         input.mode === "scheduled" ? "Produce neutral, concise dashboard insights." : input.persona === "wizard"
           ? "Speak as Alderwick the wizard: patient and gently grand; keep evidence and uncertainty clear."

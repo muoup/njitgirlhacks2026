@@ -1,11 +1,17 @@
 import type {
-  DashboardData, GardensData, InsightsResult, ReadingRange, ReadingsData, GardenResult, PlantedResult,
+  DashboardData, GardensData, InsightsResult, ReadingRange, ReadingsData, GardenResult, PlantedResult, ApiKeyResult, InsightsData,
 } from "./schemas";
 import { accountFixtures, fixtureReading, HOUR, REPORT_DELAY } from "./fixtures";
 import type { MemoryData, MemoryWriteData, MutationData } from "./agent/schemas";
 import { ApiError } from "./errors";
+import type { IngestData, IngestResult } from "./ingestion";
 
-// Internal identity boundary, not a signed token. A backend token protocol is TBD.
+export interface InsightSnapshot {
+  revision: string; generatedAt: number; dirty: boolean; version?: number;
+  gardens: Array<{ insights: InsightsData; fingerprint: string }>;
+}
+
+// Identity comes from Better Auth, never from browser/firmware request bodies.
 export interface BackendIdentity {
   version: "v1";
   userId: string;
@@ -21,7 +27,16 @@ export interface BackendAdapter {
   readMemory(identity: BackendIdentity): Promise<MemoryData>;
   writeMemory(identity: BackendIdentity, input: MemoryWriteData): Promise<MemoryData>;
   // The backend should use requestId as its idempotency key. Never pass keys to the model.
-  mutate(identity: BackendIdentity, action: MutationData, requestId: string): Promise<GardenResult | PlantedResult | void>;
+  mutate(identity: BackendIdentity, action: MutationData, requestId: string, expectedFingerprint?: string): Promise<GardenResult | PlantedResult | void>;
+  replayMutation?(identity: BackendIdentity, action: MutationData, requestId: string): Promise<{ result: GardenResult | PlantedResult | void } | null>;
+  getPlantApiKey?(identity: BackendIdentity, plantId: string): Promise<ApiKeyResult>;
+  replacePlantApiKey?(identity: BackendIdentity, plantId: string): Promise<ApiKeyResult>;
+  ingest?(key: string, input: IngestData): Promise<IngestResult>;
+  touchAccount?(identity: BackendIdentity): Promise<void>;
+  listAgentAccounts?(): Promise<BackendIdentity[]>;
+  readInsightSnapshot?(identity: BackendIdentity): Promise<InsightSnapshot>;
+  writeInsightSnapshot?(identity: BackendIdentity, snapshot: InsightSnapshot): Promise<void>;
+  recordInsightAttempt?(identity: BackendIdentity, at: number, error?: { code: string; message: string }): Promise<void>;
 }
 
 // Replace this adapter once the teammate's HTTP API is agreed.

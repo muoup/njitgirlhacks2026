@@ -43,6 +43,7 @@ export class AgentService {
   }
 
   get configured() { return Boolean(this.runner); }
+  invalidate(identity: BackendIdentity) { this.cache.delete(identity.accountId); }
 
   register(identity: BackendIdentity) {
     this.cleanup();
@@ -260,6 +261,10 @@ export class AgentService {
       this.refreshing.add(identity.accountId);
       try {
         if (!this.runner) throw new ApiError(503, "AGENT_NOT_CONFIGURED", "Set GOOGLE_VERTEX_PROJECT and configure Google Application Default Credentials on the BFF to enable insights.");
+        await this.backend.recordInsightAttempt?.(identity, now);
+        const persisted = await this.backend.readInsightSnapshot?.(identity);
+        if (persisted) this.cache.set(identity.accountId, { ...persisted,
+          gardens: new Map(persisted.gardens.map(g => [g.insights.gardenId, g])) });
         const context = await buildContext(this.backend, identity, now);
         const inputRevision = revision(context);
         const previous = this.cache.get(identity.accountId);
@@ -276,18 +281,26 @@ export class AgentService {
             insights: { gardenId: garden.gardenId, status: "ready", generatedAt: new Date(generatedAt).toISOString(),
               overviews: garden.overviews, items: garden.items.map(item => ({ ...item, id: crypto.randomUUID() })) } });
         }
+        await this.backend.writeInsightSnapshot?.(identity, { ...next, version: persisted?.version,
+          gardens: [...next.gardens.values()] });
         this.cache.set(identity.accountId, next);
         this.failures.delete(identity.accountId);
         return { refreshed: true, generatedAt: new Date(generatedAt).toISOString(), gardenIds: [...next.gardens.keys()] };
       } catch (error) {
         const failure = error instanceof ApiError ? error : new ApiError(502, "AGENT_FAILED", "Insight refresh failed. Previous insights were retained.", { cause: error });
         this.failures.set(identity.accountId, { at: this.clock(), error: { code: failure.code, message: failure.message } });
+        await this.backend.recordInsightAttempt?.(identity, this.clock(), { code: failure.code, message: failure.message })
+          .catch(storageError => logFailure(storageError, { scope: "insight-failure-storage", accountId: identity.accountId }));
         throw failure;
       } finally { this.refreshing.delete(identity.accountId); }
     });
   }
 
   decorate(identity: BackendIdentity, insights: InsightsData, dashboard?: DashboardData): InsightsData {
+    // Durable responses already include current invalidation/failure state and
+    // filter deleted plants. Never overlay them with an older process-local cache.
+    if (insights.generation) return { ...insights, generation: { ...insights.generation,
+      ...(this.refreshing.has(identity.accountId) ? { state: "refreshing" as const } : {}) } };
     const cached = this.cache.get(identity.accountId);
     const garden = cached?.gardens.get(insights.gardenId);
     const failure = this.failures.get(identity.accountId);
@@ -304,6 +317,7 @@ export class AgentService {
   async tick() {
     this.cleanup();
     if (!this.runner) return;
+    for (const identity of await this.backend.listAgentAccounts?.() ?? []) this.register(identity);
     for (const { identity } of [...this.identities.values()]) {
       if (this.busy.has(identity.accountId)) continue;
       try { await this.refresh(identity, false); } catch (error) {

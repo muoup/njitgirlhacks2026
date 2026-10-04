@@ -74,11 +74,12 @@ export const ReadingsResponse = t.Object({
   from: Timestamp,
   to: Timestamp,
   readings: t.Array(Reading),
+  sampling: t.Optional(t.Object({ method: t.Literal("last"), bucketSeconds: t.Integer({ minimum: 1 }) })),
   meta: Meta,
 });
 export const InsightsResponse = t.Object({ insights: Insights, meta: Meta });
 
-const ResourceName = t.String({ minLength: 1, pattern: "\\S" });
+const ResourceName = t.String({ minLength: 1, maxLength: 200, pattern: "\\S" });
 export const NewGarden = t.Object({ name: ResourceName });
 export const NewPlant = t.Object({ name: ResourceName, species: ResourceName });
 export const ApiKey = t.Object({

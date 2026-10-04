@@ -12,6 +12,8 @@ import { DomainService } from "./domain";
 import { AgentService } from "./agent/service";
 import { GeminiRunner, type AgentRunner } from "./agent/runner";
 import { logFailure } from "./diagnostics";
+import { IngestRequest, IngestResponse } from "./ingestion";
+import { hashKey } from "./storage/keys";
 
 const errorResponses = {
   400: s.ErrorResponse,
@@ -19,6 +21,7 @@ const errorResponses = {
   403: s.ErrorResponse,
   404: s.ErrorResponse,
   409: s.ErrorResponse,
+  413: s.ErrorResponse,
   410: s.ErrorResponse,
   422: s.ErrorResponse,
   429: s.ErrorResponse,
@@ -36,10 +39,16 @@ export async function createApp(options: {
   agentRunner?: AgentRunner;
 } = {}) {
   const config = options.config ?? loadConfig();
-  const backend = options.backend ?? new MockBackend();
+  const backend: BackendAdapter = options.backend ?? new MockBackend();
   const agents = new AgentService(backend, options.agentRunner ??
     (config.agent.project ? new GeminiRunner({ project: config.agent.project, location: config.agent.location }) : undefined));
   const domain = new DomainService(backend);
+  const ingestLimits = new Map<string, { at: number; count: number }>();
+  function requestId(request: Request) {
+    const value = request.headers.get("Idempotency-Key");
+    if (value && !/^[A-Za-z0-9_.:-]{1,120}$/.test(value)) throw new ApiError(422, "INVALID_REQUEST", "Invalid Idempotency-Key.");
+    return value ?? crypto.randomUUID();
+  }
   function checkOrigin(request: Request) {
     const origin = request.headers.get("Origin");
     if ((origin && ![...config.frontendOrigins, new URL(config.baseURL).origin].includes(origin)) ||
@@ -69,13 +78,14 @@ export async function createApp(options: {
     info: {
       title: "Grove BFF",
       version: "0.1.0",
-      description: "Cookie-authenticated dashboard and garden mentor API. Gemini chat and scheduled insights share a harness. Domain data and memory storage use development mocks; resource mutations await the backend.",
+      description: "Cookie-authenticated garden backend with PostgreSQL/TimescaleDB storage, plant-key sensor ingestion, and Gemini chat/scheduled insights. Without database configuration, development uses fixtures.",
     },
     tags: [
       ...authSchema.tags,
       { name: "Account" }, { name: "Gardens" }, { name: "Dashboard" },
       { name: "Readings" }, { name: "Insights" }, { name: "Provisioning" },
       { name: "Agent" },
+      { name: "Ingestion" },
     ],
     paths: authPaths,
     components: {
@@ -86,16 +96,18 @@ export async function createApp(options: {
           type: "apiKey", in: "cookie", name: "better-auth.session_token",
           description: "Better Auth session cookie; include credentials in frontend requests. HTTPS uses the __Secure- cookie prefix.",
         },
+        plantApiKey: { type: "http", scheme: "bearer", bearerFormat: "Plant API key",
+          description: "Firmware credential scoped to one plant/device. Browser sessions do not authorize ingestion." },
       },
     },
   } as Documentation;
 
-  const app = new Elysia()
+  const app = new Elysia({ normalize: false })
     .use(cors({
       origin: config.frontendOrigins,
       credentials: true,
       methods: ["GET", "POST", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type"],
+      allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     }))
     .onError(({ code, error, set, request }) => {
       if (error instanceof ApiError) {
@@ -141,6 +153,29 @@ export async function createApp(options: {
       response: t.Object({ status: t.Literal("ok") }),
       detail: { summary: "Server liveness", operationId: "getHealth" },
     })
+    .post("/api/v1/ingest/readings", async ({ request, body, set }) => {
+      set.headers["Cache-Control"] = "no-store";
+      const header = request.headers.get("Authorization") ?? "";
+      const match = /^Bearer (grove_device_[A-Za-z0-9_-]{43})$/i.exec(header);
+      if (!match) throw new ApiError(401, "INVALID_DEVICE_KEY", "A valid plant API key is required.");
+      if (!backend.ingest) throw new ApiError(503, "INGESTION_UNAVAILABLE", "Configure database storage to accept device readings.");
+      const now = Date.now();
+      for (const [key, entry] of ingestLimits) if (now-entry.at >= 60_000) ingestLimits.delete(key);
+      const key = hashKey(match[1]!);
+      const entry = ingestLimits.get(key) ?? { at: now, count: 0 };
+      if (entry.count >= 120 || (!ingestLimits.has(key) && ingestLimits.size >= 5000)) {
+        set.headers["Retry-After"] = "60";
+        throw new ApiError(429, "INGESTION_RATE_LIMIT", "At most 120 submissions per minute per key are accepted.");
+      }
+      entry.count++; ingestLimits.set(key, entry);
+      const result = await backend.ingest(match[1]!, body);
+      set.status = result.duplicate ? 200 : 201;
+      return result;
+    }, {
+      body: IngestRequest, response: { ...errorResponses, 200: IngestResponse, 201: IngestResponse },
+      detail: { tags: ["Ingestion"], operationId: "submitSensorReading", security: [{ plantApiKey: [] }],
+        summary: "Submit one firmware sensor sample", description: "Key determines account, plant, and device. Reuse sampleId unchanged on retries. measuredAt is optional. Raw ADC/AQ/color values are not calibrated percentages, ppm, or lux. No Gemini call is made during ingestion." },
+    })
     .macro({
       authenticated: {
         async resolve({ request }) {
@@ -150,6 +185,7 @@ export async function createApp(options: {
             version: "v1", userId: session.user.id, accountId: session.user.id,
           };
           agents.register(identity);
+          await backend.touchAccount?.(identity);
           return { user: session.user, identity };
         },
       },
@@ -170,8 +206,10 @@ export async function createApp(options: {
         response: { 200: s.GardensResponse },
         detail: { tags: ["Gardens"], summary: "List the account's gardens", operationId: "listGardens" },
       })
-      .post("/gardens", async ({ identity, body, set }) => {
-        const result = await domain.execute(identity, { kind: "createGarden", ...body }, crypto.randomUUID());
+      .post("/gardens", async ({ identity, body, set, request }) => {
+        checkOrigin(request);
+        const result = await domain.execute(identity, { kind: "createGarden", ...body }, requestId(request));
+        agents.invalidate(identity);
         if (!result || !("garden" in result)) throw new ApiError(502, "BACKEND_FAILED", "The backend did not return the new garden.");
         set.status = 201;
         return result;
@@ -179,23 +217,28 @@ export async function createApp(options: {
         body: s.NewGarden,
         response: { 201: s.GardenResponse, 501: s.ErrorResponse },
         detail: {
-          tags: ["Gardens"], summary: "Create a garden (reserved)", operationId: "createGarden",
-          description: "Validates the request, then returns 501 without creating a garden. Future success returns 201.",
+          tags: ["Gardens"], summary: "Create a garden", operationId: "createGarden",
+          description: "Account-scoped creation. Optional Idempotency-Key supports retries. Development mock storage returns 501.",
         },
       })
-      .delete("/gardens/:id", async ({ identity, params, set }) => {
-        await domain.execute(identity, { kind: "removeGarden", gardenId: params.id }, crypto.randomUUID());
+      .delete("/gardens/:id", async ({ identity, params, set, request }) => {
+        checkOrigin(request);
+        await domain.execute(identity, { kind: "removeGarden", gardenId: params.id }, requestId(request));
+        agents.invalidate(identity);
         set.status = 204;
       }, {
         params: t.Object({ id: s.Id }),
         response: { 204: t.Void(), 501: s.ErrorResponse },
         detail: {
-          tags: ["Gardens"], summary: "Remove a garden (reserved)", operationId: "removeGarden",
-          description: "Checks account ownership, then returns 501 without changes. Future success returns 204 and removes the garden's plants, readings, and keys; backend cascade semantics are pending.",
+          tags: ["Gardens"], summary: "Remove a garden", operationId: "removeGarden",
+          description: "Checks ownership and cascades to plants, devices, readings, and firmware credentials. Mock storage returns 501.",
         },
       })
-      .post("/gardens/:id/plants", async ({ identity, params, body, set }) => {
-        const result = await domain.execute(identity, { kind: "createPlant", gardenId: params.id, ...body }, crypto.randomUUID());
+      .post("/gardens/:id/plants", async ({ identity, params, body, set, request }) => {
+        checkOrigin(request);
+        set.headers["Cache-Control"] = "no-store";
+        const result = await domain.execute(identity, { kind: "createPlant", gardenId: params.id, ...body }, requestId(request));
+        agents.invalidate(identity);
         if (!result || !("plant" in result)) throw new ApiError(502, "BACKEND_FAILED", "The backend did not return the new plant.");
         set.status = 201;
         return result;
@@ -203,19 +246,21 @@ export async function createApp(options: {
         params: t.Object({ id: s.Id }), body: s.NewPlant,
         response: { 201: s.PlantedResponse, 501: s.ErrorResponse },
         detail: {
-          tags: ["Provisioning"], summary: "Create a plant with a firmware key (reserved)", operationId: "createPlant",
-          description: "Validates the request and garden ownership, then returns 501. Future success returns 201 with the plant and a backend-issued API key; no plant or key is created here.",
+          tags: ["Provisioning"], summary: "Create a plant with a firmware key", operationId: "createPlant",
+          description: "Creates one plant, associated monitor, and API key atomically. Optional Idempotency-Key supports retries. Mock storage returns 501.",
         },
       })
-      .delete("/plants/:id", async ({ identity, params, set }) => {
-        await domain.execute(identity, { kind: "removePlant", plantId: params.id }, crypto.randomUUID());
+      .delete("/plants/:id", async ({ identity, params, set, request }) => {
+        checkOrigin(request);
+        await domain.execute(identity, { kind: "removePlant", plantId: params.id }, requestId(request));
+        agents.invalidate(identity);
         set.status = 204;
       }, {
         params: t.Object({ id: s.Id }),
         response: { 204: t.Void(), 501: s.ErrorResponse },
         detail: {
-          tags: ["Provisioning"], summary: "Remove a plant (reserved)", operationId: "removePlant",
-          description: "Checks account ownership, then returns 501 without changes. Future success returns 204; backend cleanup and key revocation semantics are pending.",
+          tags: ["Provisioning"], summary: "Remove a plant", operationId: "removePlant",
+          description: "Checks ownership and deletes its device, readings, and firmware key. Mock storage returns 501.",
         },
       })
       .get("/dashboard", async ({ identity, query }) => {
@@ -241,7 +286,7 @@ export async function createApp(options: {
         response: { 200: s.ReadingsResponse },
         detail: {
           tags: ["Readings"], summary: "Read a plant's numerical history",
-          description: "Required UTC/offset timestamps, inclusive range, maximum seven days. Mock data includes reported hourly samples with a four-minute reporting delay; backend sampling is TBD.",
+          description: "Inclusive ISO timestamp range, at most seven days. Database history returns at most 361 actual samples using the last sample per time bucket; sampling describes the bucket. Full raw history stays in storage. Mock history is hourly.",
           operationId: "getPlantReadings",
         },
       })
@@ -281,28 +326,31 @@ export async function createApp(options: {
       }, {
         body: t.Optional(t.Object({})), response: { 200: a.RefreshResponse },
         detail: { tags: ["Insights", "Agent"], operationId: "refreshAgentInsights", summary: "Force an account-wide scheduled insight refresh",
-          description: "Runs the same restricted harness as cron, bypassing the unchanged-input cache. Can update memory and insights, never propose or execute garden/plant mutations. Waits for completion; requires a configured Gemini key. Existing insights survive failures." },
+          description: "Runs the restricted cron harness, bypassing cache. Can update memory and insights, never garden/plant resources. Requires a Vertex project and ADC. Existing insights survive failures." },
       })
       .get("/plants/:id/api-keys", async ({ identity, params, set }) => {
         set.headers["Cache-Control"] = "no-store";
         await requirePlant(identity, params.id);
+        if (backend.getPlantApiKey) return backend.getPlantApiKey(identity, params.id);
         throw new ApiError(501, "NOT_IMPLEMENTED", "Plant API-key retrieval awaits the backend protocol.");
       }, {
         params: t.Object({ id: s.Id }), response: { 200: s.ApiKeyResponse, 501: s.ErrorResponse },
         detail: {
-          tags: ["Provisioning"], summary: "Retrieve a plant API key (reserved)", operationId: "getPlantApiKey",
-          description: "Checks account ownership, then returns 501. Future success returns a secret with Cache-Control: no-store. Backend key storage and whether existing secrets can be retrieved are TBD.",
+          tags: ["Provisioning"], summary: "Retrieve a plant API key", operationId: "getPlantApiKey",
+          description: "Owner-only retrieval of an encrypted-at-rest key. Cache-Control: no-store. Mock storage returns 501.",
         },
       })
-      .post("/plants/:id/api-keys", async ({ identity, params, set }) => {
+      .post("/plants/:id/api-keys", async ({ identity, params, set, request }) => {
+        checkOrigin(request);
         set.headers["Cache-Control"] = "no-store";
         await requirePlant(identity, params.id);
+        if (backend.replacePlantApiKey) return backend.replacePlantApiKey(identity, params.id);
         throw new ApiError(501, "NOT_IMPLEMENTED", "Plant API-key issuance awaits the backend protocol.");
       }, {
         params: t.Object({ id: s.Id }), response: { 200: s.ApiKeyResponse, 501: s.ErrorResponse },
         detail: {
-          tags: ["Provisioning"], summary: "Replace a plant API key (reserved)", operationId: "replacePlantApiKey",
-          description: "Checks account ownership, then returns 501 without issuing or revoking keys. Future success returns a backend-issued key with Cache-Control: no-store and invalidates the old credential.",
+          tags: ["Provisioning"], summary: "Replace a plant API key", operationId: "replacePlantApiKey",
+          description: "Owner-only rotation; old key stops authenticating. Mock storage returns 501.",
         },
       }),
     ));

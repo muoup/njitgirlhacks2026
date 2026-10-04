@@ -7,6 +7,15 @@ import { GeminiRunner } from "../src/agent/runner";
 import { testVertexAuth } from "./vertex-auth";
 
 describe("server failure diagnostics", () => {
+  test("database URLs and plant credentials are redacted from stack frames", () => {
+    const key = `grove_device_${"x".repeat(43)}`;
+    const databaseUrl = "postgresql://fixture-user:fixture-password@db.example/grove?sslmode=require";
+    const error = Object.assign(new Error("private query and parameters"), { code: "28P01",
+      stack: `Error: private query and parameters\n    at connect (${databaseUrl}:1:2)\n    at ingest (${key}:3:4)` });
+    const serialized = JSON.stringify(failureDetails(error));
+    expect(serialized).toContain("28P01");
+    for (const sensitive of [key, "fixture-password", "private query and parameters", "fixture-user"]) expect(serialized).not.toContain(sensitive);
+  });
   test("cause/retry traces keep provider reasons and exclude messages, keys, and payloads", () => {
     const provider = Object.assign(new Error("private-prompt\n    at private-memory:1:2"), {
       statusCode: 400, url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=private-key",

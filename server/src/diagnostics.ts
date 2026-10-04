@@ -8,10 +8,13 @@ function token(value: unknown) {
 }
 function redact(value: string) {
   let result = value;
-  for (const secret of [process.env.GEMINI_API_KEY, process.env.GOOGLE_GENERATIVE_AI_API_KEY, process.env.GOOGLE_VERTEX_API_KEY, process.env.BETTER_AUTH_SECRET]) {
+  for (const secret of [process.env.GEMINI_API_KEY, process.env.GOOGLE_GENERATIVE_AI_API_KEY, process.env.GOOGLE_VERTEX_API_KEY, process.env.BETTER_AUTH_SECRET,
+    process.env.DATABASE_URL, process.env.DEVICE_API_KEY_ENCRYPTION_KEY, process.env.GOOGLE_CLIENT_SECRET]) {
     if (secret) result = result.split(secret).join("[redacted]");
   }
   return result.replace(/AIza[\w-]{20,}/g, "[redacted]")
+    .replace(/grove_device_[A-Za-z0-9_-]{43}/g, "[redacted]")
+    .replace(/postgres(?:ql)?:\/\/[^\s)]+/g, "[redacted]")
     .replace(/(https?:\/\/[^\s?]+)\?[^\s)]*/g, "$1?[redacted]");
 }
 function endpoint(value: unknown) {

@@ -33,20 +33,29 @@ BETTER_AUTH_SECRET=YOUR_GENERATED_SECRET
 Generate a secret with `openssl rand -base64 32`; paste it into `server/.env`.
 It remains required in both deployment modes.
 
-For the current hackathon scaffold, run from the repository root:
+For the database-backed deployment, complete [Tiger setup](server/TIGER_SETUP.md),
+then run from the repository root:
+
+```bash
+./prod.sh
+```
+
+`DATABASE_URL` selects the PostgreSQL domain adapter and durable Better Auth
+storage. Both secrets and applied migrations are required; startup refuses a
+missing/unreachable schema. New real accounts start with empty gardens.
+
+For the original hackathon fixtures, run:
 
 ```bash
 ./prod.sh --demo
 ```
 
-This explicitly allows fixture data and in-memory authentication while keeping
+This explicitly ignores `DATABASE_URL` and allows fixture data and in-memory authentication while keeping
 `NODE_ENV=production`. Accounts, sessions, memory, conversations, and insights
 disappear on restart. The usual demo account is seeded unless
 `SEED_DEMO_ACCOUNT=false` is set. Garden/plant mutations remain unimplemented.
 
-Once durable auth and a real backend adapter are wired into `server/src/index.ts`,
-use `./prod.sh` without `--demo`. That mode retains the checks requiring those
-adapters and disables demo seeding. The current entry point will refuse it.
+Plain `./prod.sh` keeps the real-storage checks and disables demo seeding.
 
 The frontend listens on port 3000 by default; the BFF uses `server/.env`'s `PORT`
 (default 3001). Override them independently if needed:
