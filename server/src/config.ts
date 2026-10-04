@@ -3,6 +3,7 @@ export interface Config {
   baseURL: string;
   frontendOrigins: string[];
   production: boolean;
+  allowDemoInProduction: boolean;
   authSecret: string;
   google?: { clientId: string; clientSecret: string };
   seedDemo: boolean;
@@ -11,6 +12,7 @@ export interface Config {
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const production = env.NODE_ENV === "production";
+  const allowDemoInProduction = production && env.ALLOW_DEMO_IN_PRODUCTION === "true";
   const port = Number(env.PORT ?? 3001);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("PORT must be an integer between 1 and 65535.");
@@ -31,12 +33,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     baseURL: env.BETTER_AUTH_URL ?? `http://localhost:${port}`,
     frontendOrigins,
     production,
+    allowDemoInProduction,
     // Development-only fallback; sessions are already ephemeral with memory storage.
     authSecret: env.BETTER_AUTH_SECRET ?? `${crypto.randomUUID()}${crypto.randomUUID()}`,
     google: env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
       ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
       : undefined,
-    seedDemo: !production && env.SEED_DEMO_ACCOUNT !== "false",
+    seedDemo: (!production || allowDemoInProduction) && env.SEED_DEMO_ACCOUNT !== "false",
     agent: {
       project: (env.GOOGLE_VERTEX_PROJECT || env.GOOGLE_CLOUD_PROJECT)?.trim() || undefined,
       location: env.GOOGLE_VERTEX_LOCATION?.trim() || "global",

@@ -230,6 +230,10 @@ For durable authentication, inject a supported Better Auth database adapter via
 `createApp({ authDatabase, backend })`. No database technology has been selected.
 The default entry point refuses production execution until real backend and auth
 storage adapters have been configured. Demo seeding is disabled in production.
+For an explicit VM deployment of the current ephemeral scaffold, use
+`./prod.sh --demo` from the repo root; this enables `ALLOW_DEMO_IN_PRODUCTION`
+while keeping production settings and the required auth secret. See
+[deployment instructions](../DEPLOYMENT.md) for public URLs and ports.
 
 Implementing backend mutations, durable scheduling/storage, and richer dynamic UI
 remain later work.
