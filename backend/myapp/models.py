@@ -20,3 +20,9 @@ class Reading(models.Model):
     reading = models.TextField(blank=False, null=False)
 
 
+class RequestLog(models.Model):
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    method = models.CharField(blank=False, null=False, max_length=50)
+    path = models.TextField()
+    status_code = models.IntegerField()
+    ip = models.GenericIPAddressField(null=True)
