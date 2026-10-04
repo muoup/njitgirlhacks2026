@@ -143,31 +143,44 @@ function chance(place: number, of: number) {
 
 const n = (value: number) => value.toFixed(1);
 
-/** A flat stone, lying whichever way it fell: a closed curve through corners set unevenly around its middle. */
-function stone({ x, y }: Step, count: number, seed: number) {
+const shape = (points: Point[]) => points.map(([x, y]) => `${n(x)},${n(y)}`).join(" ");
+
+interface Stone {
+  body: string;
+  lit: string;
+  dim: string;
+}
+
+/**
+ * A flat stone, lying whichever way it fell: straight cuts between corners set unevenly around
+ * its middle, with a face that catches the moon and one turned from it. The corners start from
+ * the moon's side, so every stone is lit from the same way.
+ */
+function stone({ x, y }: Step, count: number, seed: number): Stone {
   const tilt = chance(count, seed + 4) * Math.PI;
-  const reach = (STONE / 2) * (0.88 + 0.26 * chance(count, seed + 5));
-  const corners = Array.from({ length: 7 }, (_, corner): Point => {
-    const turn = ((corner + (chance(count * 7 + corner, seed + 6) - 0.5) * 0.4) / 7) * Math.PI * 2;
-    const far = reach * (0.88 + 0.24 * chance(count * 7 + corner, seed + 7));
-    // A little longer one way than the other, then turned.
-    const [long, short] = [Math.cos(turn) * far, Math.sin(turn) * far * 0.8];
-    return [x + long * Math.cos(tilt) - short * Math.sin(tilt), y + long * Math.sin(tilt) + short * Math.cos(tilt)];
+  const reach = (STONE / 2) * (0.9 + 0.28 * chance(count, seed + 5));
+  const sides = chance(count, seed + 8) < 0.5 ? 6 : 7;
+  const corners = Array.from({ length: sides }, (_, corner): Point => {
+    const turn = -2.7 + ((corner + (chance(count * 7 + corner, seed + 6) - 0.5) * 0.5) / sides) * Math.PI * 2;
+    // A little longer one way than the other.
+    const oval = 0.78 / Math.hypot(0.78 * Math.cos(turn - tilt), Math.sin(turn - tilt));
+    const far = reach * oval * (0.86 + 0.28 * chance(count * 7 + corner, seed + 7));
+    return [x + Math.cos(turn) * far, y + Math.sin(turn) * far];
   });
-  const between = (corner: number): Point => {
-    const [ax, ay] = corners[corner % 7]!;
-    const [bx, by] = corners[(corner + 1) % 7]!;
-    return [(ax + bx) / 2, (ay + by) / 2];
+  const crown: Point = [x - reach * 0.12 + reach * 0.3 * (chance(count, seed + 9) - 0.5), y - reach * 0.1];
+  const away = Math.floor(sides / 2);
+  return {
+    body: shape(corners),
+    lit: shape([crown, ...corners.slice(0, 3)]),
+    dim: shape([crown, ...corners.slice(away, away + 3)]),
   };
-  const [fx, fy] = between(6);
-  return `M ${n(fx)} ${n(fy)} ${corners.map(([cx, cy], corner) => `Q ${n(cx)} ${n(cy)} ${n(between(corner)[0])} ${n(between(corner)[1])}`).join(" ")} Z`;
 }
 
 /** The stones of one unbroken length of trail, a stride apart, leaving room wherever a stop's marker lies. */
 function stretch(line: Point[], markers: Point[], seed: number) {
   const places = wander(line, seed);
   const stride = (places.length - 1) / Math.max(1, Math.round(((places.length - 1) * FINE) / STRIDE));
-  const stones: string[] = [];
+  const stones: Stone[] = [];
   for (let count = 0; (count + 0.5) * stride < places.length - 1; count += 1) {
     const place = places[Math.round((count + 0.35 + 0.3 * chance(count, seed + 3)) * stride)]!;
     if (markers.some(([x, y]) => Math.hypot(place.x - x, place.y - y) < STONE * 0.8)) continue;
@@ -181,10 +194,12 @@ function Track({ route, markers = [], className }: { route: Point[][]; markers?:
   return (
     <g className={className}>
       {route.flatMap((line, index) =>
-        stretch(line, markers, index * 20).map(d => (
-          <g key={d}>
-            <path d={d} transform="translate(0 3)" className="fill-(--grove-shade)" />
-            <path d={d} className="fill-(--grove-stone)" />
+        stretch(line, markers, index * 20).map(({ body, lit, dim }) => (
+          <g key={body}>
+            <polygon points={body} transform="translate(0 3)" className="fill-(--grove-shade)" />
+            <polygon points={body} className="fill-(--grove-stone)" />
+            <polygon points={lit} fill="rgb(255 255 255 / 0.13)" />
+            <polygon points={dim} fill="rgb(0 0 0 / 0.16)" />
           </g>
         )),
       )}
