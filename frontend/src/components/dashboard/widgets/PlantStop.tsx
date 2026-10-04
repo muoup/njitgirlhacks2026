@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { PlantMushroom } from "@/components/grove/PlantMushroom";
 import { Button } from "@/components/ui/button";
 import { spanInWords, timeAgo } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { BlockView, isWide } from "../Blocks";
 import { type Metrics, useMetrics } from "../metrics";
 import { Note } from "../Note";
@@ -79,7 +80,11 @@ export function PlantStop({
   );
   const draw = (shown: OverviewBlock[]) =>
     shown.map((block, index) => <BlockView key={index} block={block} plantId={plant.id} reading={reading} />);
-  const steps = blocks.filter(block => block.type === "steps");
+  // A chart fills its side of the board, so the steps go under the note. Without one, that side
+  // would be left mostly bare: the steps go there instead, and what it holds is set at mid-height.
+  const charted = blocks.some(block => block.type === "chart");
+  const beside = charted ? blocks.filter(block => block.type !== "steps") : blocks;
+  const under = charted ? blocks.filter(block => block.type === "steps") : [];
   const note = overview.text && (
     <Note light={color} cut={cut} foot={basis(overview.evidence, metrics)}>
       {overview.text}
@@ -102,11 +107,10 @@ export function PlantStop({
               {heading}
               {/* The note is set against the board and hangs a little off its edge. */}
               {note && <div className="mt-5 -ml-7 max-w-sm sm:-ml-9">{note}</div>}
-              {/* What to do follows what was said; the measurements have the other side to themselves. */}
-              {steps.length > 0 && <div className="mt-5 grid gap-5">{draw(steps)}</div>}
+              {under.length > 0 && <div className="mt-5 grid gap-5">{draw(under)}</div>}
               <div className="mt-3">{move}</div>
             </div>
-            <div className="grid min-w-0 content-start gap-5">{draw(blocks.filter(block => block.type !== "steps"))}</div>
+            <div className={cn("grid min-w-0 gap-5", charted ? "content-start" : "content-center")}>{draw(beside)}</div>
           </div>
         </Plaque>
       ) : blocks.length > 0 ? (
