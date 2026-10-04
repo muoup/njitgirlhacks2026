@@ -7,6 +7,7 @@ import type {
   ReadingsData as ReadingsResponse,
   NewPlantData as NewPlant, ApiKeyData as ApiKey, GardenResult as GardenResponse,
   ApiKeyResult as ApiKeyResponse, PlantedResult as PlantedResponse,
+  PlantEditData as PlantEdit, PlantResult as PlantResponse,
 } from "../../../../server/src/schemas";
 import type { ChatRequestData as ChatRequest, ChatResponseData as ChatResponse,
   PendingActionData as PendingAction, DecisionData as DecisionResponse,
@@ -16,7 +17,7 @@ export type { ChatRequest, ChatResponse, PendingAction, DecisionResponse, Refres
 export type {
   Garden, Plant, PlantStatus, Device, Measurement, MetricInfo, Reading, InsightItem,
   Insights, Meta, GardensResponse, DashboardResponse, ReadingsResponse,
-  NewPlant, ApiKey, GardenResponse, ApiKeyResponse, PlantedResponse,
+  NewPlant, ApiKey, GardenResponse, ApiKeyResponse, PlantedResponse, PlantEdit, PlantResponse,
 };
 
 /** A non-2xx answer carrying the BFF error code and message. */
@@ -63,6 +64,8 @@ export interface GroveApi {
   removeGarden(gardenId: string): Promise<void>;
   /** POST /gardens/:id/plants. A new plant comes with its key. */
   createPlant(gardenId: string, plant: NewPlant): Promise<PlantedResponse>;
+  /** PATCH /plants/:id. Its readings and its key stay as they are. */
+  updatePlant(plantId: string, edit: PlantEdit): Promise<PlantResponse>;
   /** DELETE /plants/:id */
   removePlant(plantId: string): Promise<void>;
   /** GET /plants/:id/api-keys */

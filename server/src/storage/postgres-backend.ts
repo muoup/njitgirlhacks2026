@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type { BackendAdapter, BackendIdentity, InsightSnapshot } from "../backend";
 import type { ApiKeyResult, DashboardData, GardensData, GardenResult, InsightsData, InsightsResult,
-  PlantedResult, ReadingData, ReadingRange, ReadingsData } from "../schemas";
+  PlantEditData, PlantedResult, PlantResult, ReadingData, ReadingRange, ReadingsData } from "../schemas";
 import type { MemoryData, MemoryWriteData, MutationData } from "../agent/schemas";
 import { ApiError } from "../errors";
 import { validateSample, type IngestData, type IngestResult } from "../ingestion";
@@ -118,6 +118,21 @@ export class PostgresBackend implements BackendAdapter {
       ON CONFLICT(plant_id) DO UPDATE SET key_hash=$2,encrypted_key=$3,created_at=now() RETURNING created_at`,
       [plantId, issued.hash, issued.encrypted])).rows[0];
     return { apiKey: { key: issued.key, createdAt: iso(row.created_at) } };
+  }
+  async updatePlant(identity: BackendIdentity, plantId: string, edit: PlantEditData): Promise<PlantResult> {
+    return transaction(this.pool, async client => {
+      await this.lock(client, identity.accountId);
+      const before = await this.ownedPlant(client, identity, plantId);
+      const plant = (await client.query(`UPDATE grove.plants SET name=$2, species=$3 WHERE id=$1
+        RETURNING id,garden_id AS "gardenId",name,species`,
+        [plantId, edit.name?.trim() ?? before.name, edit.species?.trim() ?? before.species])).rows[0];
+      // A monitor still named after its plant follows the plant's new name.
+      await client.query("UPDATE grove.devices SET name=$2 WHERE plant_id=$1 AND name=$3",
+        [plantId, `${plant.name} monitor`, `${before.name} monitor`]);
+      // Generated notes may call the plant by its old name.
+      if (plant.name !== before.name || plant.species !== before.species) await this.dirty(client, identity.accountId);
+      return { plant };
+    });
   }
   async getPlantApiKey(identity: BackendIdentity, plantId: string): Promise<ApiKeyResult> {
     await this.ownedPlant(this.pool, identity, plantId);

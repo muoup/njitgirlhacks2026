@@ -137,6 +137,7 @@ describe("BFF contracts and sessions", () => {
       { path: "/api/v1/gardens", method: "POST", body: { name: "New garden" }, scoped: false },
       { path: `/api/v1/gardens/${gardenId}`, method: "DELETE", scoped: true },
       { path: `/api/v1/gardens/${gardenId}/plants`, method: "POST", body: { name: "Rosemary", species: "Salvia rosmarinus" }, scoped: true },
+      { path: `/api/v1/plants/${plantId}`, method: "PATCH", body: { name: "Renamed" }, scoped: true },
       { path: `/api/v1/plants/${plantId}`, method: "DELETE", scoped: true },
       { path: `/api/v1/plants/${plantId}/api-keys`, method: "GET", scoped: true },
       { path: `/api/v1/plants/${plantId}/api-keys`, method: "POST", scoped: true },
@@ -160,7 +161,7 @@ describe("BFF contracts and sessions", () => {
     expect(await (await request(`/api/v1/dashboard?gardenId=${gardenId}`, owner)).json()).toEqual(dashboard);
   });
 
-  test("shed creation validates input and browser preflight allows DELETE", async () => {
+  test("shed creation and edits validate input and browser preflight allows PATCH and DELETE", async () => {
     const cookie = await signUp("shed-validation@example.com");
     const { gardens } = await (await request("/api/v1/gardens", cookie)).json();
     for (const body of [{}, { name: "" }, { name: "   " }, { name: 42 }]) {
@@ -171,12 +172,19 @@ describe("BFF contracts and sessions", () => {
     for (const body of [{ name: "Fern" }, { name: " ", species: "Fern" }, { name: "Fern", species: " " }]) {
       expect((await request(`/api/v1/gardens/${gardens[0].id}/plants`, cookie, body)).status).toBe(422);
     }
+    const dashboard = await (await request(`/api/v1/dashboard?gardenId=${gardens[0].id}`, cookie)).json();
+    for (const body of [{}, { name: " " }, { species: "" }, { name: "Fern", species: 42 }]) {
+      const response = await request(`/api/v1/plants/${dashboard.plants[0].id}`, cookie, body, "PATCH");
+      expect(response.status).toBe(422);
+      expect((await response.json()).error.code).toBe("INVALID_REQUEST");
+    }
     const preflight = await app.handle(new Request(`http://localhost:3001/api/v1/gardens/${gardens[0].id}`, {
       method: "OPTIONS",
       headers: { Origin: origin, "Access-Control-Request-Method": "DELETE" },
     }));
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-methods")).toContain("DELETE");
+    expect(preflight.headers.get("access-control-allow-methods")).toContain("PATCH");
     expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
     expect(preflight.headers.get("access-control-allow-credentials")).toBe("true");
   });
@@ -207,6 +215,7 @@ describe("BFF contracts and sessions", () => {
       ["/api/v1/gardens", "post", "201"],
       ["/api/v1/gardens/{id}", "delete", "204"],
       ["/api/v1/gardens/{id}/plants", "post", "201"],
+      ["/api/v1/plants/{id}", "patch", "200"],
       ["/api/v1/plants/{id}", "delete", "204"],
       ["/api/v1/plants/{id}/api-keys", "get", "200"],
       ["/api/v1/plants/{id}/api-keys", "post", "200"],

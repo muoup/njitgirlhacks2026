@@ -149,6 +149,23 @@ describe("PostgreSQL-backed app", () => {
     expect(await backend.hydrateDashboard(alice, gardenId)).not.toBeNull();
     if (added && "plant" in added) await backend.mutate(alice, { kind: "removePlant", plantId: added.plant.id }, "remove-thyme");
   });
+  test("a plant can be renamed by its owner alone, keeping its key and readings", async () => {
+    const path = `/api/v1/plants/${plantId}`;
+    expect((await request(path, { name: "Stolen" }, bobCookie, "PATCH")).status).toBe(404);
+    expect((await request(path, {}, cookie, "PATCH")).status).toBe(422);
+    const history = (await backend.getReadings(alice, plantId, { from: new Date(now - 86_400_000).toISOString(), to: new Date(now).toISOString() }))?.readings.length;
+    const renamed = await request(path, { name: "  Sweet basil " }, cookie, "PATCH");
+    expect(renamed.status).toBe(200);
+    expect((await renamed.json()).plant).toEqual({ id: plantId, gardenId, name: "Sweet basil", species: "Ocimum basilicum" });
+    const dashboard = await backend.hydrateDashboard(alice, gardenId);
+    expect(dashboard?.plants[0]).toMatchObject({ name: "Sweet basil", species: "Ocimum basilicum" });
+    // The monitor was named after the plant, so it follows the new name.
+    expect(dashboard?.devices[0]?.name).toBe("Sweet basil monitor");
+    expect((await (await request(`${path}/api-keys`)).json()).apiKey.key).toBe(key);
+    expect((await backend.getReadings(alice, plantId, { from: new Date(now - 86_400_000).toISOString(), to: new Date(now).toISOString() }))?.readings.length).toBe(history);
+    const both = await request(path, { name: "Basil", species: "Ocimum basilicum 'Genovese'" }, cookie, "PATCH");
+    expect((await both.json()).plant).toMatchObject({ name: "Basil", species: "Ocimum basilicum 'Genovese'" });
+  });
   test("auth sessions and keys survive recreation; rotation immediately rejects old keys", async () => {
     runtime = await createApp({ config, backend: new PostgresBackend(fixture.pool, encryptionKey, () => now), authDatabase: authDatabase(fixture.pool) });
     expect((await request("/api/v1/me")).status).toBe(200);

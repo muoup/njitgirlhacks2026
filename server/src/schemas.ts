@@ -101,11 +101,14 @@ export const InsightsResponse = t.Object({ insights: Insights, meta: Meta });
 const ResourceName = t.String({ minLength: 1, maxLength: 200, pattern: "\\S" });
 export const NewGarden = t.Object({ name: ResourceName });
 export const NewPlant = t.Object({ name: ResourceName, species: ResourceName });
+export const PlantEdit = t.Object({ name: t.Optional(ResourceName), species: t.Optional(ResourceName) }, {
+  minProperties: 1, description: "The fields to change. One left out keeps its value." });
 export const ApiKey = t.Object({
   key: t.String({ minLength: 1, description: "Firmware credential issued by the backend; treat as a secret." }),
   createdAt: Timestamp,
 });
 export const GardenResponse = t.Object({ garden: Garden });
+export const PlantResponse = t.Object({ plant: Plant });
 export const ApiKeyResponse = t.Object({ apiKey: ApiKey });
 export const PlantedResponse = t.Object({ plant: Plant, apiKey: ApiKey });
 
@@ -125,6 +128,8 @@ export type ReadingsData = Static<typeof ReadingsResponse>;
 export type InsightsResult = Static<typeof InsightsResponse>;
 export type ReadingRange = Static<typeof ReadingsQuery>;
 export type NewPlantData = Static<typeof NewPlant>;
+export type PlantEditData = Static<typeof PlantEdit>;
+export type PlantResult = Static<typeof PlantResponse>;
 export type ApiKeyData = Static<typeof ApiKey>;
 export type GardenResult = Static<typeof GardenResponse>;
 export type ApiKeyResult = Static<typeof ApiKeyResponse>;

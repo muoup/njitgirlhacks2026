@@ -112,7 +112,7 @@ export async function createApp(options: {
     .use(cors({
       origin: config.frontendOrigins,
       credentials: true,
-      methods: ["GET", "POST", "DELETE", "OPTIONS"],
+      methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     }))
     .onError(({ code, error, set, request }) => {
@@ -254,6 +254,21 @@ export async function createApp(options: {
         detail: {
           tags: ["Provisioning"], summary: "Create a plant with a firmware key", operationId: "createPlant",
           description: "Creates one plant, associated monitor, and API key atomically. Optional Idempotency-Key supports retries. Mock storage returns 501.",
+        },
+      })
+      .patch("/plants/:id", async ({ identity, params, body, request }) => {
+        checkOrigin(request);
+        await requirePlant(identity, params.id);
+        if (!backend.updatePlant) throw new ApiError(501, "NOT_IMPLEMENTED", "Plant changes await the backend protocol.");
+        const result = await backend.updatePlant(identity, params.id, body);
+        agents.invalidate(identity);
+        return result;
+      }, {
+        params: t.Object({ id: s.Id }), body: s.PlantEdit,
+        response: { 200: s.PlantResponse, 501: s.ErrorResponse },
+        detail: {
+          tags: ["Provisioning"], summary: "Rename a plant or correct its species", operationId: "updatePlant",
+          description: "Changes the name, the species, or both; a field left out keeps its value. The plant keeps its readings and its firmware key. Mock storage returns 501.",
         },
       })
       .delete("/plants/:id", async ({ identity, params, set, request }) => {

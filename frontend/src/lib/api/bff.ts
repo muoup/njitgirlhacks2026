@@ -40,6 +40,7 @@ export function createBffApi(baseUrl: string): GroveApi {
     createGarden: name => request("/gardens", "POST", { name }),
     removeGarden: gardenId => request(garden(gardenId), "DELETE"),
     createPlant: (gardenId, newPlant) => request(`${garden(gardenId)}/plants`, "POST", newPlant),
+    updatePlant: (plantId, edit) => request(plant(plantId), "PATCH", edit),
     removePlant: plantId => request(plant(plantId), "DELETE"),
     getPlantApiKey: plantId => request(`${plant(plantId)}/api-keys`),
     replacePlantApiKey: plantId => request(`${plant(plantId)}/api-keys`, "POST"),

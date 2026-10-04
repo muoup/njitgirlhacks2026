@@ -1,5 +1,6 @@
 import type {
   DashboardData, GardensData, InsightsResult, ReadingRange, ReadingsData, GardenResult, PlantedResult, ApiKeyResult, InsightsData,
+  PlantEditData, PlantResult,
 } from "./schemas";
 import { accountFixtures, fixtureReading, HOUR, REPORT_DELAY } from "./fixtures";
 import type { MemoryData, MemoryWriteData, MutationData } from "./agent/schemas";
@@ -30,6 +31,7 @@ export interface BackendAdapter {
   // The backend should use requestId as its idempotency key. Never pass keys to the model.
   mutate(identity: BackendIdentity, action: MutationData, requestId: string, expectedFingerprint?: string): Promise<GardenResult | PlantedResult | void>;
   replayMutation?(identity: BackendIdentity, action: MutationData, requestId: string): Promise<{ result: GardenResult | PlantedResult | void } | null>;
+  updatePlant?(identity: BackendIdentity, plantId: string, edit: PlantEditData): Promise<PlantResult>;
   getPlantApiKey?(identity: BackendIdentity, plantId: string): Promise<ApiKeyResult>;
   replacePlantApiKey?(identity: BackendIdentity, plantId: string): Promise<ApiKeyResult>;
   ingest?(key: string, input: IngestData): Promise<IngestResult>;

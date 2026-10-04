@@ -138,6 +138,9 @@ function SignedIn({ user }: { user: SessionUser }) {
                     setFreshKeys(keys => ({ ...keys, [plant.id]: apiKey }));
                     editBed(bed.garden.id, current => ({ ...current, plants: [...current.plants, plant] }));
                   }}
+                  onPlantEdited={plant =>
+                    editBed(bed.garden.id, current => ({ ...current, plants: current.plants.map(item => (item.id === plant.id ? plant : item)) }))
+                  }
                   onPlantRemoved={plantId =>
                     editBed(bed.garden.id, current => ({ ...current, plants: current.plants.filter(plant => plant.id !== plantId) }))
                   }

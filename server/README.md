@@ -65,6 +65,7 @@ is never seeded in database mode or ordinary production.
 | POST /api/v1/gardens | Create `{ name }`, returns 201 `{ garden }` |
 | DELETE /api/v1/gardens/:id | Delete garden, plants, devices, readings, keys; 204 |
 | POST /api/v1/gardens/:id/plants | Create `{ name, species }`, device and key; 201 `{ plant, apiKey }` |
+| PATCH /api/v1/plants/:id | Change name and/or species; readings and key are kept; 200 |
 | DELETE /api/v1/plants/:id | Delete plant/device/readings/key; 204 |
 | GET /api/v1/dashboard?gardenId=... | Garden, plants/devices, latest samples, insights |
 | GET /api/v1/plants/:id/readings?from=...&to=... | Inclusive ISO range, at most 7 days |
