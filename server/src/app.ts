@@ -163,6 +163,12 @@ export async function createApp(options: {
       response: t.Object({ status: t.Literal("ok") }),
       detail: { summary: "Server liveness", operationId: "getHealth" },
     })
+    // Public: the sign-in page asks before anyone has a session.
+    .get("/api/v1/sign-in/methods", () => ({ google: Boolean(config.google) }), {
+      response: t.Object({ google: t.Boolean() }),
+      detail: { tags: ["Account"], summary: "List the ways to sign in", operationId: "listSignInMethods",
+        description: "Email and password always work. Google is offered only when the server has OAuth credentials." },
+    })
     .post("/api/v1/ingest/readings", async ({ request, body, set }) => {
       set.headers["Cache-Control"] = "no-store";
       const header = request.headers.get("Authorization") ?? "";

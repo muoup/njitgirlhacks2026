@@ -29,6 +29,11 @@ export function createBffAuth(baseURL: string): AuthSource {
       // On success the browser leaves for Google and comes back to the dashboard.
       check(await client.signIn.social({ provider: "google", callbackURL: `${window.location.origin}/dashboard` }));
     },
+    async methods() {
+      const response = await fetch(`${baseURL}/api/v1/sign-in/methods`);
+      if (!response.ok) throw new Error("The ways to sign in could not be read.");
+      return { google: (await response.json()).google === true };
+    },
     async signOut() {
       check(await client.signOut());
     },

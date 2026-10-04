@@ -51,7 +51,7 @@ in frontend/.env and is bundled into browser assets.
 
 Google sign-in is optional and uses GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET for a
 Web application OAuth client. Register the public API's
-`/api/auth/callback/google` URL. Gemini credentials are separate. Email/password
+`/api/auth/callback/google` URL. Without both, the sign-in page leaves the Google button out. Gemini credentials are separate. Email/password
 signup/login works without Google. Verification/password-reset email delivery is
 not configured. A forgotten password is replaced from the server instead, with
 `bun run auth:password EMAIL`: it needs `server/.env`, so only whoever runs the
@@ -66,6 +66,7 @@ is never seeded in database mode or ordinary production.
 | Route | Behavior |
 | --- | --- |
 | GET /api/v1/me | Current user/account |
+| GET /api/v1/sign-in/methods | Public: `{ google }`, true when Google sign-in has its credentials |
 | GET /api/v1/gardens | Account gardens with plant/device counts |
 | POST /api/v1/gardens | Create `{ name }`, returns 201 `{ garden }` |
 | PATCH /api/v1/gardens/:id | Change name, setting (`indoors`/`outdoors`) and/or `location`; null forgets it; 200 |
@@ -80,7 +81,7 @@ is never seeded in database mode or ordinary production.
 | GET /api/v1/plants/:id/api-keys | Owner-only retrieval of recoverable encrypted key |
 | POST /api/v1/plants/:id/api-keys | Rotate key; old credential stops working |
 
-Browser routes require a session. Unknown/inaccessible resources return 404.
+Browser routes require a session, except the list of sign-in methods. Unknown/inaccessible resources return 404.
 Resource mutations check request origin. Creation/deletion optionally accept
 Idempotency-Key; account-scoped database transactions persist replay results and
 reject reuse for different arguments. Secret responses use Cache-Control:no-store.

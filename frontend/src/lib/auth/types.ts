@@ -14,5 +14,7 @@ export interface AuthSource {
   signIn(email: string, password: string): Promise<void>;
   signUp(name: string, email: string, password: string): Promise<void>;
   signInWithGoogle(): Promise<void>;
+  /** The ways to sign in besides email and password that the server has been set up for. */
+  methods(): Promise<{ google: boolean }>;
   signOut(): Promise<void>;
 }

@@ -42,6 +42,10 @@ beforeAll(async () => {
 describe("BFF contracts and sessions", () => {
   test("public health and docs work; domain data requires login", async () => {
     expect(await (await request("/health")).json()).toEqual({ status: "ok" });
+    // Google sign-in is offered only by a server that has its OAuth credentials.
+    expect(await (await request("/api/v1/sign-in/methods")).json()).toEqual({ google: false });
+    const withGoogle = await createApp({ config: loadConfig({ SEED_DEMO_ACCOUNT: "false", GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" }) });
+    expect(await (await withGoogle.app.handle(new Request("http://localhost:3001/api/v1/sign-in/methods"))).json()).toEqual({ google: true });
     const response = await request("/api/v1/gardens");
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
