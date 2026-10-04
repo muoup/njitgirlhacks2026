@@ -14,15 +14,17 @@ export interface TrailStop {
 // the trail only shows between them.
 const GUTTER = { left: 0.91, right: 0.09 };
 const NARROW = [0.36, 0.64];
-// In pixels: how wide the trail is, and how round its turns are.
-const STRIP = 34;
-const TURN = 84;
+// In pixels: how wide a stepping stone is, how far it is from one to the next, and how round the trail's turns are.
+const STONE = 40;
+const STRIDE = 60;
+const TURN = 96;
+// Where a stop's marker lies below the top of the stop, in pixels.
+const MARKER = 58;
 
-// The clearing behind a stop: moonlit ground, cut unevenly in fixed pixels so tall stops are not more skewed.
+// The clearing behind a stop: a patch of short grass, rounded unevenly in fixed pixels so tall stops are not more skewed.
 const CLEARING = {
-  background: "linear-gradient(164deg, var(--grove-clearing-hi) 42%, var(--grove-clearing) 42%)",
-  clipPath:
-    "polygon(14px 6px, 38% 0, calc(100% - 20px) 10px, 100% 46%, calc(100% - 8px) calc(100% - 4px), 55% 100%, 6px calc(100% - 12px), 0 40%)",
+  background: "var(--grove-clearing)",
+  borderRadius: "44px 56px 48px 52px / 52px 44px 56px 46px",
 };
 
 interface Ground {
@@ -49,7 +51,7 @@ function bend(...points: Point[]): Point[] {
 function wideRoute({ width, stops }: Ground): Point[][] {
   const last = stops.at(-1);
   if (!last) return [];
-  const end = last.bottom - STRIP;
+  const end = last.bottom - STONE;
   const crossings = stops.map((stop, index) => ((stops[index - 1]?.bottom ?? 0) + stop.top) / 2);
   let x = width / 2;
   const line: Point[] = [[x, 0]];
@@ -89,7 +91,7 @@ interface Step {
 }
 
 /** Places along a line, the same distance apart. */
-function walk(line: Point[], every: number): Step[] {
+function along(line: Point[], every: number): Point[] {
   const places: Point[] = [line[0]!];
   let owed = every;
   for (let index = 1; index < line.length; index += 1) {
@@ -104,12 +106,33 @@ function walk(line: Point[], every: number): Step[] {
     }
     owed -= length - done;
   }
+  return places;
+}
+
+/** Each place with the side of the way through it. */
+function sided(places: Point[]): Step[] {
   return places.map(([x, y], index) => {
     const [ax, ay] = places[Math.max(0, index - 1)]!;
     const [bx, by] = places[Math.min(places.length - 1, index + 1)]!;
     const length = Math.hypot(bx - ax, by - ay) || 1;
     return { x, y, sx: (by - ay) / length, sy: -(bx - ax) / length };
   });
+}
+
+// In pixels: how far apart the places on the trail are, and how far it strays to either side of its line.
+const FINE = 6;
+const SWAY = 15;
+
+/** The same line as feet would wear it: straying a little to one side and then the other, between ends that stay put. */
+function wander(line: Point[], seed: number): Step[] {
+  const straight = sided(along(line, FINE));
+  return sided(
+    straight.map(({ x, y, sx, sy }, index) => {
+      const settled = Math.min(1, index / 14, (straight.length - 1 - index) / 14);
+      const off = SWAY * settled * (0.6 * Math.sin((index * FINE) / 46 + seed) + 0.4 * Math.sin((index * FINE) / 21 + seed * 2.3));
+      return [x + sx * off, y + sy * off];
+    }),
+  );
 }
 
 /** A fixed number from 0 to 1 for a place on the trail, so the trail is drawn the same way each time. */
@@ -119,98 +142,52 @@ function chance(place: number, of: number) {
 }
 
 const n = (value: number) => value.toFixed(1);
-const shape = (points: Point[]) => points.map(([x, y]) => `${n(x)},${n(y)}`).join(" ");
 
-/** Ground along the steps, reaching `reach(index, side)` pixels to either side of each, with straight cuts between. */
-function strip(steps: Step[], reach: (index: number, side: 1 | -1) => number) {
-  const edge = (side: 1 | -1) => steps.map(({ x, y, sx, sy }, index): Point => [x + side * sx * reach(index, side), y + side * sy * reach(index, side)]);
-  return shape([...edge(1), ...edge(-1).reverse()]);
-}
-
-interface Stretch {
-  verge: string;
-  earth: string;
-  worn: string;
-  stones: { body: string; lit: string }[];
-  tufts: { blades: string; pale: boolean }[];
-}
-
-// In steps of FINE pixels: how far apart the trail's edge is cut.
-const FINE = 6;
-const CUT = 4;
-
-/** One unbroken length of trail: bare earth with uneven edges, worn paler down the middle, stones to step on and grass at the verge. */
-function stretch(line: Point[], seed: number): Stretch {
-  const fine = walk(line, FINE);
-  const steps = fine.filter((_, index) => index % CUT === 0 || index === fine.length - 1);
-  // The trail narrows to nothing much where it begins and ends.
-  const taper = (index: number) => [0.3, 0.75][Math.min(index, steps.length - 1 - index)] ?? 1;
-  const half = (index: number, side: number) => (STRIP / 2) * taper(index) * (0.78 + 0.5 * chance(index, seed + side));
-
-  const stones: Stretch["stones"] = [];
-  for (let at = 5, count = 0; at < fine.length - 4; at += 6 + Math.floor(chance(count, seed + 3) * 7), count += 1) {
-    const { x, y, sx, sy } = fine[at]!;
-    // Mostly flat stones to step on, down the middle; now and then a pebble kicked to the side.
-    const pebble = chance(count, seed + 4) < 0.3;
-    const aside = (chance(count, seed + 5) - 0.5) * (pebble ? 22 : 8);
-    const size = pebble ? 3 + chance(count, seed + 6) * 1.5 : 6.5 + chance(count, seed + 6) * 3.5;
-    const sides = chance(count, seed + 2) < 0.5 ? 5 : 6;
-    const centre: Point = [x + sx * aside, y + sy * aside];
-    // The first corners face the moon, so every stone is lit from the same side.
-    const corners = Array.from({ length: sides }, (_, corner): Point => {
-      const turn = -2.5 + ((corner + (chance(count * sides + corner, seed + 7) - 0.5) * 0.5) / sides) * Math.PI * 2;
-      const far = size * (0.8 + 0.4 * chance(count * sides + corner, seed + 8));
-      return [centre[0] + Math.cos(turn) * far, centre[1] + Math.sin(turn) * far];
-    });
-    stones.push({ body: shape(corners), lit: shape([centre, ...corners.slice(0, 3)]) });
-  }
-
-  const tufts: Stretch["tufts"] = [];
-  steps.forEach(({ x, y, sx, sy }, index) => {
-    if (taper(index) < 1 || chance(index, seed + 9) > 0.3) return;
-    const side = chance(index, seed + 10) < 0.5 ? 1 : -1;
-    const from = half(index, side) - 2;
-    const tall = 7 + chance(index, seed + 11) * 6;
-    // Outward from the edge, and along it.
-    const at = (out: number, along: number): Point => [x + side * sx * (from + out) - sy * along, y + side * sy * (from + out) + sx * along];
-    tufts.push({
-      blades: shape([at(0, -4), at(tall * 0.8, -6), at(2, -1.4), at(tall, 0.6), at(2, 1.4), at(tall * 0.7, 6), at(0, 4)]),
-      pale: chance(index, seed + 12) < 0.4,
-    });
+/** A flat stone, lying whichever way it fell: a closed curve through corners set unevenly around its middle. */
+function stone({ x, y }: Step, count: number, seed: number) {
+  const tilt = chance(count, seed + 4) * Math.PI;
+  const reach = (STONE / 2) * (0.88 + 0.26 * chance(count, seed + 5));
+  const corners = Array.from({ length: 7 }, (_, corner): Point => {
+    const turn = ((corner + (chance(count * 7 + corner, seed + 6) - 0.5) * 0.4) / 7) * Math.PI * 2;
+    const far = reach * (0.88 + 0.24 * chance(count * 7 + corner, seed + 7));
+    // A little longer one way than the other, then turned.
+    const [long, short] = [Math.cos(turn) * far, Math.sin(turn) * far * 0.8];
+    return [x + long * Math.cos(tilt) - short * Math.sin(tilt), y + long * Math.sin(tilt) + short * Math.cos(tilt)];
   });
-
-  return {
-    verge: strip(steps, (index, side) => half(index, side) + 3 + 4 * chance(index, seed + side + 13)),
-    earth: strip(steps, half),
-    worn: strip(steps, (index, side) => half(index, side) * (0.3 + 0.35 * chance(index, seed + side + 15))),
-    stones,
-    tufts,
+  const between = (corner: number): Point => {
+    const [ax, ay] = corners[corner % 7]!;
+    const [bx, by] = corners[(corner + 1) % 7]!;
+    return [(ax + bx) / 2, (ay + by) / 2];
   };
+  const [fx, fy] = between(6);
+  return `M ${n(fx)} ${n(fy)} ${corners.map(([cx, cy], corner) => `Q ${n(cx)} ${n(cy)} ${n(between(corner)[0])} ${n(between(corner)[1])}`).join(" ")} Z`;
 }
 
-/** The trail itself: a strip of bare earth trodden into the forest floor, with stepping stones along it. */
-function Track({ route, className }: { route: Point[][]; className?: string }) {
+/** The stones of one unbroken length of trail, a stride apart, leaving room wherever a stop's marker lies. */
+function stretch(line: Point[], markers: Point[], seed: number) {
+  const places = wander(line, seed);
+  const stride = (places.length - 1) / Math.max(1, Math.round(((places.length - 1) * FINE) / STRIDE));
+  const stones: string[] = [];
+  for (let count = 0; (count + 0.5) * stride < places.length - 1; count += 1) {
+    const place = places[Math.round((count + 0.35 + 0.3 * chance(count, seed + 3)) * stride)]!;
+    if (markers.some(([x, y]) => Math.hypot(place.x - x, place.y - y) < STONE * 0.8)) continue;
+    stones.push(stone(place, count, seed));
+  }
+  return stones;
+}
+
+/** The trail itself: stepping stones set in the grass, each with the dark of its own edge under it. */
+function Track({ route, markers = [], className }: { route: Point[][]; markers?: Point[]; className?: string }) {
   return (
     <g className={className}>
-      {route.map((line, index) => {
-        const { verge, earth, worn, stones, tufts } = stretch(line, index * 20);
-        return (
-          <g key={index}>
-            <polygon points={verge} className="fill-(--grove-shade)" />
-            <polygon points={earth} className="fill-(--grove-earth)" />
-            <polygon points={worn} className="fill-(--grove-earth-hi)" />
-            {tufts.map(({ blades, pale }) => (
-              <polygon key={blades} points={blades} className={pale ? "fill-(--grove-near-1)" : "fill-(--grove-mid-1)"} />
-            ))}
-            {stones.map(({ body, lit }) => (
-              <g key={body}>
-                <polygon points={body} className="fill-(--grove-stone)" />
-                <polygon points={lit} className="fill-(--grove-stone-hi)" />
-              </g>
-            ))}
+      {route.flatMap((line, index) =>
+        stretch(line, markers, index * 20).map(d => (
+          <g key={d}>
+            <path d={d} transform="translate(0 3)" className="fill-(--grove-shade)" />
+            <path d={d} className="fill-(--grove-stone)" />
           </g>
-        );
-      })}
+        )),
+      )}
     </g>
   );
 }
@@ -218,13 +195,21 @@ function Track({ route, className }: { route: Point[][]; className?: string }) {
 /**
  * Lays widgets out as stops along a path that winds down from the grove: the first stop is
  * the first thing reached, so the order of the list is the order of importance. The path is
- * drawn as one line through wherever the stops have come to rest.
+ * laid as one line of stepping stones through wherever the stops have come to rest.
  */
 export function Trail({ stops }: { stops: TrailStop[] }) {
   const root = useRef<HTMLDivElement>(null);
   const [ground, setGround] = useState<Ground | null>(null);
   const keys = stops.map(stop => stop.key).join("\n");
-  const route = useMemo(() => ground && { narrow: narrowRoute(ground), wide: wideRoute(ground) }, [ground]);
+  const route = useMemo(
+    () =>
+      ground && {
+        narrow: narrowRoute(ground),
+        wide: wideRoute(ground),
+        markers: ground.stops.map(({ top }, index): Point => [ground.width * GUTTER[sideOf(index)], top + MARKER]),
+      },
+    [ground],
+  );
 
   useLayoutEffect(() => {
     const element = root.current;
@@ -250,7 +235,7 @@ export function Trail({ stops }: { stops: TrailStop[] }) {
       {route && (
         <svg aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 size-full overflow-visible">
           <Track className="lg:hidden" route={route.narrow} />
-          <Track className="hidden lg:block" route={route.wide} />
+          <Track className="hidden lg:block" route={route.wide} markers={route.markers} />
         </svg>
       )}
       {stops.map((stop, index) => {
