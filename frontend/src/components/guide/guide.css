@@ -1,0 +1,52 @@
+/* The field guide is the one page on paper: the page's own tokens, in ink instead of light. */
+.guide-sheet {
+  --paper: #f1e6cb;
+  --paper-lo: #d9c79e;
+  --ink: #2b2116;
+  --ink-soft: #5b4a35;
+  --rule: #b8a47d;
+  --stamp: #a9502c;
+  --foreground: var(--ink);
+  --muted-foreground: var(--ink-soft);
+  --border: var(--rule);
+
+  color: var(--ink);
+  /* Two folds across the sheet, as hard-edged as the facets everywhere else. */
+  background:
+    linear-gradient(98deg, transparent 72%, rgb(120 90 40 / 0.06) 72%),
+    linear-gradient(175deg, rgb(255 255 255 / 0.3) 16%, transparent 16%),
+    var(--paper);
+  /* Torn by hand: the edges wander a few pixels in and out. */
+  clip-path: polygon(
+    0 9px, 14% 0, 31% 7px, 52% 2px, 71% 9px, 88% 1px, 100% 8px,
+    calc(100% - 5px) 9%, 100% 21%, calc(100% - 7px) 36%, calc(100% - 1px) 52%, calc(100% - 6px) 69%, 100% 84%, calc(100% - 4px) 94%,
+    100% calc(100% - 9px), 84% 100%, 63% calc(100% - 8px), 41% calc(100% - 2px), 22% calc(100% - 9px), 0 calc(100% - 3px),
+    6px 91%, 0 78%, 5px 63%, 1px 47%, 7px 33%, 0 18%
+  );
+}
+
+/* The shadow is on a wrapper, since the sheet's own would be torn off with its edges. */
+.guide-desk {
+  filter: drop-shadow(0 20px 36px rgb(0 0 0 / 0.5));
+}
+
+/* A paper corner holding a plate. Drawn for the top left, and turned for the other three. */
+.guide-corner {
+  position: absolute;
+  width: 1.375rem;
+  height: 1.375rem;
+  background: linear-gradient(135deg, var(--paper-lo) 34%, var(--rule) 34%);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+/* The mushroom's own window: ten sides, like the moon. */
+.guide-medallion {
+  clip-path: polygon(50% 0, 79.4% 9.5%, 97.6% 34.5%, 97.6% 65.5%, 79.4% 90.5%, 50% 100%, 20.6% 90.5%, 2.4% 65.5%, 2.4% 34.5%, 20.6% 9.5%);
+}
+
+/* A specimen label: ruled twice round. */
+.guide-label {
+  border: 1px solid var(--rule);
+  outline: 1px solid var(--rule);
+  outline-offset: 3px;
+}

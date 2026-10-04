@@ -6,6 +6,7 @@ export interface Config {
   authSecret: string;
   google?: { clientId: string; clientSecret: string };
   seedDemo: boolean;
+  agent: { apiKey?: string; scheduleEnabled: boolean };
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -36,5 +37,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
       : undefined,
     seedDemo: !production && env.SEED_DEMO_ACCOUNT !== "false",
+    agent: { apiKey: env.GEMINI_API_KEY || undefined, scheduleEnabled: env.AGENT_SCHEDULE_ENABLED !== "false" },
   };
 }

@@ -1,11 +1,15 @@
 /*
- * The mentors stand behind the chat board and look over its top edge. The one answering is
- * up; the other has dropped behind the board, which hides it. Changing who answers drops one
- * quickly and then brings the other up with a small bounce.
+ * The mentors stand behind a board and look over its top edge. The one answering is up; the
+ * other has dropped out of the bottom of their window, which the board covers. Changing who
+ * answers drops one quickly and then brings the other up with a small bounce.
  */
+.mentor-window {
+  /* Shut only at the bottom: a hat may sway out of the top and sides. */
+  clip-path: inset(-3rem -3rem 0 -3rem);
+}
+
 .mentor-figure {
-  /* Its own height, less what was already behind the board, and a little more to clear the board's cut edge. */
-  transform: translateY(calc(100% - 0.5rem));
+  transform: translateY(102%);
   transition: transform 0.3s cubic-bezier(0.55, 0, 0.9, 0.45);
 }
 
@@ -26,4 +30,48 @@
   to {
     transform: rotate(1.2deg);
   }
+}
+
+/* The sidebar slides in from the right edge. While it is away it cannot be seen, reached or read out. */
+.mentor-dock {
+  transform: translateX(104%);
+  visibility: hidden;
+  transition:
+    transform 0.4s cubic-bezier(0.5, 0, 0.8, 0.4),
+    visibility 0s 0.4s;
+}
+
+.mentor-dock[data-open="true"] {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+
+/* While the sidebar is away, the mentor leans in from the same edge. */
+.mentor-peek {
+  transition: translate 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s;
+}
+
+.mentor-peek[data-away="true"] {
+  translate: 110% 0;
+  visibility: hidden;
+  transition:
+    translate 0.25s ease-in,
+    visibility 0s 0.25s;
+}
+
+.mentor-peek-figure {
+  transform-origin: 50% 100%;
+  rotate: -26deg;
+  transition:
+    rotate 0.35s cubic-bezier(0.3, 1.5, 0.6, 1),
+    translate 0.35s cubic-bezier(0.3, 1.5, 0.6, 1);
+}
+
+.mentor-peek:hover .mentor-peek-figure,
+.mentor-peek:focus-visible .mentor-peek-figure {
+  rotate: -34deg;
+  translate: -0.6rem 0;
 }

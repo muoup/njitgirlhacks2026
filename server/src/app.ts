@@ -6,32 +6,44 @@ import { createAuth, seedDemoAccount } from "./auth";
 import { MockBackend, type BackendAdapter, type BackendIdentity } from "./backend";
 import { loadConfig, type Config } from "./config";
 import * as s from "./schemas";
-
-class ApiError extends Error {
-  constructor(public status: 400 | 401 | 404 | 501, public code: string, message: string) {
-    super(message);
-  }
-}
+import * as a from "./agent/schemas";
+import { ApiError } from "./errors";
+import { DomainService } from "./domain";
+import { AgentService } from "./agent/service";
+import { GeminiRunner, type AgentRunner } from "./agent/runner";
 
 const errorResponses = {
   400: s.ErrorResponse,
   401: s.ErrorResponse,
+  403: s.ErrorResponse,
   404: s.ErrorResponse,
+  409: s.ErrorResponse,
+  410: s.ErrorResponse,
   422: s.ErrorResponse,
+  429: s.ErrorResponse,
   500: s.ErrorResponse,
+  501: s.ErrorResponse,
+  502: s.ErrorResponse,
+  503: s.ErrorResponse,
+  504: s.ErrorResponse,
 };
 
 export async function createApp(options: {
   config?: Config;
   backend?: BackendAdapter;
   authDatabase?: BetterAuthOptions["database"];
+  agentRunner?: AgentRunner;
 } = {}) {
   const config = options.config ?? loadConfig();
   const backend = options.backend ?? new MockBackend();
-  async function requireGarden(identity: BackendIdentity, gardenId: string) {
-    const { gardens } = await backend.listGardens(identity);
-    if (!gardens.some(garden => garden.id === gardenId)) {
-      throw new ApiError(404, "NOT_FOUND", "Garden not found.");
+  const agents = new AgentService(backend, options.agentRunner ??
+    (config.agent.apiKey ? new GeminiRunner(config.agent.apiKey) : undefined));
+  const domain = new DomainService(backend);
+  function checkOrigin(request: Request) {
+    const origin = request.headers.get("Origin");
+    if ((origin && ![...config.frontendOrigins, new URL(config.baseURL).origin].includes(origin)) ||
+      (!origin && request.headers.get("Sec-Fetch-Site") === "cross-site")) {
+      throw new ApiError(403, "FORBIDDEN_ORIGIN", "This origin cannot submit agent requests.");
     }
   }
   async function requirePlant(identity: BackendIdentity, plantId: string) {
@@ -56,12 +68,13 @@ export async function createApp(options: {
     info: {
       title: "Grove BFF",
       version: "0.1.0",
-      description: "Cookie-authenticated dashboard API. Domain responses are development fixtures; backend integration, caching, and Gemini scheduling are deferred.",
+      description: "Cookie-authenticated dashboard and garden mentor API. Gemini chat and scheduled insights share a harness. Domain data and memory storage use development mocks; resource mutations await the backend.",
     },
     tags: [
       ...authSchema.tags,
       { name: "Account" }, { name: "Gardens" }, { name: "Dashboard" },
       { name: "Readings" }, { name: "Insights" }, { name: "Provisioning" },
+      { name: "Agent" },
     ],
     paths: authPaths,
     components: {
@@ -132,6 +145,7 @@ export async function createApp(options: {
           const identity: BackendIdentity = {
             version: "v1", userId: session.user.id, accountId: session.user.id,
           };
+          agents.register(identity);
           return { user: session.user, identity };
         },
       },
@@ -152,8 +166,11 @@ export async function createApp(options: {
         response: { 200: s.GardensResponse },
         detail: { tags: ["Gardens"], summary: "List the account's gardens", operationId: "listGardens" },
       })
-      .post("/gardens", () => {
-        throw new ApiError(501, "NOT_IMPLEMENTED", "Garden creation awaits the backend protocol.");
+      .post("/gardens", async ({ identity, body, set }) => {
+        const result = await domain.execute(identity, { kind: "createGarden", ...body }, crypto.randomUUID());
+        if (!result || !("garden" in result)) throw new ApiError(502, "BACKEND_FAILED", "The backend did not return the new garden.");
+        set.status = 201;
+        return result;
       }, {
         body: s.NewGarden,
         response: { 201: s.GardenResponse, 501: s.ErrorResponse },
@@ -162,9 +179,9 @@ export async function createApp(options: {
           description: "Validates the request, then returns 501 without creating a garden. Future success returns 201.",
         },
       })
-      .delete("/gardens/:id", async ({ identity, params }) => {
-        await requireGarden(identity, params.id);
-        throw new ApiError(501, "NOT_IMPLEMENTED", "Garden removal awaits the backend protocol.");
+      .delete("/gardens/:id", async ({ identity, params, set }) => {
+        await domain.execute(identity, { kind: "removeGarden", gardenId: params.id }, crypto.randomUUID());
+        set.status = 204;
       }, {
         params: t.Object({ id: s.Id }),
         response: { 204: t.Void(), 501: s.ErrorResponse },
@@ -173,9 +190,11 @@ export async function createApp(options: {
           description: "Checks account ownership, then returns 501 without changes. Future success returns 204 and removes the garden's plants, readings, and keys; backend cascade semantics are pending.",
         },
       })
-      .post("/gardens/:id/plants", async ({ identity, params }) => {
-        await requireGarden(identity, params.id);
-        throw new ApiError(501, "NOT_IMPLEMENTED", "Plant creation awaits the backend protocol.");
+      .post("/gardens/:id/plants", async ({ identity, params, body, set }) => {
+        const result = await domain.execute(identity, { kind: "createPlant", gardenId: params.id, ...body }, crypto.randomUUID());
+        if (!result || !("plant" in result)) throw new ApiError(502, "BACKEND_FAILED", "The backend did not return the new plant.");
+        set.status = 201;
+        return result;
       }, {
         params: t.Object({ id: s.Id }), body: s.NewPlant,
         response: { 201: s.PlantedResponse, 501: s.ErrorResponse },
@@ -184,9 +203,9 @@ export async function createApp(options: {
           description: "Validates the request and garden ownership, then returns 501. Future success returns 201 with the plant and a backend-issued API key; no plant or key is created here.",
         },
       })
-      .delete("/plants/:id", async ({ identity, params }) => {
-        await requirePlant(identity, params.id);
-        throw new ApiError(501, "NOT_IMPLEMENTED", "Plant removal awaits the backend protocol.");
+      .delete("/plants/:id", async ({ identity, params, set }) => {
+        await domain.execute(identity, { kind: "removePlant", plantId: params.id }, crypto.randomUUID());
+        set.status = 204;
       }, {
         params: t.Object({ id: s.Id }),
         response: { 204: t.Void(), 501: s.ErrorResponse },
@@ -198,7 +217,7 @@ export async function createApp(options: {
       .get("/dashboard", async ({ identity, query }) => {
         const dashboard = await backend.hydrateDashboard(identity, query.gardenId);
         if (!dashboard) throw new ApiError(404, "NOT_FOUND", "Garden not found.");
-        return dashboard;
+        return { ...dashboard, insights: agents.decorate(identity, dashboard.insights, dashboard) };
       }, {
         query: t.Object({ gardenId: s.Id }),
         response: { 200: s.DashboardResponse },
@@ -225,13 +244,40 @@ export async function createApp(options: {
       .get("/gardens/:id/insights", async ({ identity, params }) => {
         const result = await backend.getInsights(identity, params.id);
         if (!result) throw new ApiError(404, "NOT_FOUND", "Garden not found.");
-        return result;
+        return { ...result, insights: agents.decorate(identity, result.insights) };
       }, {
         params: t.Object({ id: s.Id }), response: { 200: s.InsightsResponse },
         detail: {
           tags: ["Insights"], summary: "Read existing garden insights", operationId: "getGardenInsights",
-          description: "Does not call Gemini or schedule generation. Freshness policy is TBD.",
+          description: "Returns cached generated insights when available, with freshness and failure metadata. Does not call Gemini synchronously; use POST /api/v1/insights/refresh to force generation.",
         },
+      })
+      .post("/chat", ({ identity, body, request, set }) => {
+        checkOrigin(request);
+        set.headers["Cache-Control"] = "no-store";
+        return agents.chat(identity, body);
+      }, {
+        body: a.ChatRequest, response: { 200: a.ChatResponse },
+        detail: { tags: ["Agent"], operationId: "askMentor", summary: "Chat with the account-wide garden mentor",
+          description: "Gnome and wizard share all account gardens and MEMORY.md. Conversations and request deduplication last one hour in this process. Additions/removals return proposals for explicit popup approval." },
+      })
+      .post("/chat/actions/:id/decision", ({ identity, params, body, request, set }) => {
+        checkOrigin(request);
+        set.headers["Cache-Control"] = "no-store";
+        return agents.decide(identity, params.id, body.decision);
+      }, {
+        params: t.Object({ id: s.Id }), body: a.DecisionRequest, response: { 200: a.DecisionResponse },
+        detail: { tags: ["Agent"], operationId: "decideAgentAction", summary: "Approve or cancel an exact proposed change",
+          description: "Account ownership, expiry, and target state are rechecked. Repeated decisions do not execute twice in this process. A 200 response can contain action.status=failed, including NOT_IMPLEMENTED while the backend is unavailable." },
+      })
+      .post("/insights/refresh", ({ identity, request, set }) => {
+        checkOrigin(request);
+        set.headers["Cache-Control"] = "no-store";
+        return agents.refresh(identity, true);
+      }, {
+        body: t.Optional(t.Object({})), response: { 200: a.RefreshResponse },
+        detail: { tags: ["Insights", "Agent"], operationId: "refreshAgentInsights", summary: "Force an account-wide scheduled insight refresh",
+          description: "Runs the same restricted harness as cron, bypassing the unchanged-input cache. Can update memory and insights, never propose or execute garden/plant mutations. Waits for completion; requires a configured Gemini key. Existing insights survive failures." },
       })
       .get("/plants/:id/api-keys", async ({ identity, params, set }) => {
         set.headers["Cache-Control"] = "no-store";
@@ -257,5 +303,5 @@ export async function createApp(options: {
       }),
     ));
 
-  return { app, auth };
+  return { app, auth, agents };
 }

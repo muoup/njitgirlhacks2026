@@ -75,7 +75,10 @@ function GardenBody({ view }: { view: DashboardView }) {
         }))}
       />
       <p className="mt-14 mb-0 text-xs text-muted-foreground">
-        {dashboard.meta.source === "mock" && "Sample data, not live sensor readings or generated insights. "}
+        {dashboard.meta.source === "mock" && "Sample sensor readings. "}
+        {dashboard.insights.generation?.state === "ready" && "Generated garden insights. "}
+        {dashboard.insights.generation?.state === "refreshing" && "Refreshing garden insights. "}
+        {(dashboard.insights.generation?.state === "stale" || dashboard.insights.generation?.state === "failed") && "Garden insights need a refresh. "}
         Updated {timeAgo(dashboard.meta.hydratedAt)}.
       </p>
     </Body>
@@ -83,8 +86,8 @@ function GardenBody({ view }: { view: DashboardView }) {
 }
 
 const TALLY: { urgency: Urgency; one: string; many: string }[] = [
-  { urgency: "act", one: "needs you", many: "need you" },
-  { urgency: "watch", one: "to check on", many: "to check on" },
+  { urgency: "act", one: "calls for you", many: "call for you" },
+  { urgency: "watch", one: "to look in on", many: "to look in on" },
 ];
 
 /** The line under the garden sign: how many plants want something, and how fresh the numbers are. */
@@ -105,7 +108,7 @@ function Summary({ dashboard, overviews }: { dashboard: DashboardResponse; overv
       {counts.length === 0 && assessed && (
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="size-2.5 rotate-45 bg-grove-ok" />
-          Nothing needs you
+          Nothing calls for you
         </span>
       )}
       {heard && <span className="font-normal">heard {timeAgo(heard)}</span>}

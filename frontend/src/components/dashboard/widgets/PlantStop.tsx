@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import type { Reading } from "@/lib/api";
 import { formatMeasurement, metricLabel, timeAgo } from "@/lib/format";
 import { LineChart } from "../LineChart";
+import { Note } from "../Note";
 import { type OverviewBlock, type PlantOverview, URGENCY, urgencyLabel } from "../overview";
 import { Plaque, Skeleton } from "../Panel";
-import { Slip } from "../ParchmentNote";
 import { mostMoved, rangeOf, seriesByMetric, usePlantReadings } from "../readings";
 import { type DashboardView, findPlant, latestReading } from "../view";
 
@@ -53,9 +53,9 @@ function ChartBlock({ plantId, block }: { plantId: string; block: Extract<Overvi
 }
 
 /**
- * One plant as a stop on the trail: its headline, what was written about it on a slip of
- * paper, and whichever blocks its overview (or the layout) asks for on a wooden plaque.
- * An overview with no blocks is just the headline and the slip.
+ * One plant as a stop on the trail: its headline, what was written about it on a
+ * slate, and whichever blocks its overview (or the layout) asks for on a wooden plaque.
+ * An overview with no blocks is just the headline and the note.
  */
 export function PlantStop({
   overview,
@@ -109,10 +109,10 @@ export function PlantStop({
       <ChartBlock key={index} plantId={plant.id} block={block} />
     ),
   );
-  const slip = overview.text && (
-    <Slip pin={color} tilt={cut}>
+  const note = overview.text && (
+    <Note light={color} cut={cut}>
       {overview.text}
-    </Slip>
+    </Note>
   );
 
   return (
@@ -129,8 +129,8 @@ export function PlantStop({
           <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
             <div className="min-w-0">
               {heading}
-              {/* The slip is pinned to the board and hangs a little off its edge. */}
-              {slip && <div className="mt-5 -ml-7 max-w-sm sm:-ml-9">{slip}</div>}
+              {/* The note is set against the board and hangs a little off its edge. */}
+              {note && <div className="mt-5 -ml-7 max-w-sm sm:-ml-9">{note}</div>}
               <div className="mt-3">{move}</div>
             </div>
             <div className="grid min-w-0 content-start gap-5">{drawn}</div>
@@ -145,8 +145,8 @@ export function PlantStop({
             </div>
             <div className="mt-3">{move}</div>
           </Plaque>
-          {/* With no chart to sit beside, the slip is pinned over the board's lower edge. */}
-          {slip && <div className="relative z-10 -mt-6 mr-6 ml-auto max-w-sm">{slip}</div>}
+          {/* With no chart to sit beside, the note hangs over the board's lower edge. */}
+          {note && <div className="relative z-10 -mt-6 mr-6 ml-auto max-w-sm">{note}</div>}
         </>
       ) : (
         <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5">
@@ -154,7 +154,7 @@ export function PlantStop({
             {heading}
             <div className="mt-2">{move}</div>
           </div>
-          {slip && <div className="max-w-sm min-w-[min(100%,16rem)] flex-1">{slip}</div>}
+          {note && <div className="max-w-sm min-w-[min(100%,16rem)] flex-1">{note}</div>}
         </div>
       )}
     </article>

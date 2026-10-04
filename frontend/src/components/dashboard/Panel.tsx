@@ -12,7 +12,7 @@ const CUTS = [
 
 /**
  * The wooden plaque that measured data sits on: an uneven wood frame around a flat dark
- * face, the same board as the sign-in page. Written notes go on paper instead.
+ * face, the same board as the sign-in page. Written notes go on a slate instead.
  */
 export function Plaque({
   title,

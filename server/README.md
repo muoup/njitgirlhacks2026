@@ -2,8 +2,9 @@
 
 A standalone Bun/Elysia server for frontend development. Better Auth owns browser
 authentication. An injected backend adapter hydrates dashboard data; the default
-adapter generates deterministic, account-scoped fixtures. No domain database,
-SQLite, Arduino ingestion, cache policy, or Gemini scheduler is implemented.
+adapter generates deterministic, account-scoped fixtures. Gemini chat and scheduled
+insights use a shared agent harness. Domain mutations, durable storage, and Arduino
+ingestion remain backend integration work; no local database or memory files are used.
 
 ## Run
 
@@ -80,14 +81,90 @@ Mock monitors report on UTC hour boundaries with a four-minute delay. Latest
 readings and history share one value generator, so values at the same timestamp
 agree across requests. Histories exclude samples that have not reported yet.
 The adapter captures a trend reference time on startup and accepts an injectable
-clock for tests. Mock insights are timestamped two hours before that reference;
-their age does not trigger generation. The frontend imports response types from
-`src/schemas.ts` with type-only imports.
+clock for tests. Initial fixture insights are timestamped two hours before that
+reference; generated insights replace them in BFF responses once refreshed. The
+frontend imports response types from `src/schemas.ts` and `src/agent/schemas.ts`
+with type-only imports.
 
 Domain errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 Malformed schemas return 422, invalid time ranges 400, absent sessions 401, and
 missing or inaccessible resources 404. Better Auth endpoints retain Better Auth's
 native error format, which is included in the merged OpenAPI document.
+
+## Garden mentor
+
+Set `GEMINI_API_KEY` in `server/.env` and restart the BFF. The model is fixed in
+code to `gemini-3.8-flash`, with `thinkingLevel: "medium"`, through Vercel's AI SDK
+and Google provider. The frontend uses real BFF chat calls; missing configuration
+returns 503 `AGENT_NOT_CONFIGURED`. It does not fabricate replies. Existing domain
+and auth routes remain usable without a key.
+
+Chat and scheduled runs share account-wide context: all gardens, plant records,
+latest readings, deterministic summaries of seven days of history, and MEMORY.md.
+Prewritten guidance lives in `skills/`. Model context excludes firmware keys and
+auth credentials. Tools read account data, read/update memory, and load skills.
+Only chat can propose garden/plant additions or removals. Scheduled runs have no
+mutation tools and cannot create approvals. Tool loops are capped at eight steps,
+32 tool calls, 6,000 output tokens, and a 60-second model timeout; at most four
+accounts run concurrently and an account cannot have overlapping agent work.
+
+| Route | Body | Result |
+| --- | --- | --- |
+| `POST /api/v1/chat` | `{ message, persona, requestId, conversationId? }` | `{ conversationId, reply, pendingActions, contextRevision }` |
+| `POST /api/v1/chat/actions/:id/decision` | `{ decision: "approve" \| "cancel" }` | `{ action }` |
+| `POST /api/v1/insights/refresh` | `{}` or no body | `{ refreshed, generatedAt, gardenIds }` |
+
+All three routes require a Better Auth session. Browser callers send credentials
+and must use a configured frontend origin or the BFF's own origin. Chat responses
+and action decisions use `Cache-Control: no-store`. The chat message limit is 500
+characters. Conversations and request deduplication are ephemeral and expire
+after an hour. Retry a message with the same request ID and identical body to
+receive the prior successful response without another model call.
+
+Pending actions expire after ten minutes. Approving executes the stored arguments
+after rechecking ownership and target state; cancellation never executes it.
+Decisions cannot replace action arguments. Repeated decisions do not execute twice
+within this process. The frontend renders approval cards in both chat views and
+refreshes data after a successful change. While mutations are stubbed, an approved
+action returns HTTP 200 with `action.status: "failed"` and result code
+`NOT_IMPLEMENTED`; HTTP success here means the decision was processed.
+
+The listening entry point starts a worker every 30 minutes when a key is present.
+It processes accounts seen in authenticated requests during the last 24 hours.
+It rebuilds context and generates only when inputs change, the last result is at
+least an hour old, or the previous refresh failed. Fetch time alone does not count
+as an input change. `AGENT_SCHEDULE_ENABLED=false` disables the periodic worker,
+while manual refresh remains available. App factories, tests, and OpenAPI generation
+do not start the worker or make model calls on startup.
+
+**Force a refresh immediately:** use the frontend's **Refresh garden insights**
+button, or call `POST /api/v1/insights/refresh` with your session cookie. This awaits
+generation for all account gardens and bypasses the unchanged-input cache, using
+the same restricted scheduled harness. For example, run this in the frontend's
+browser console while signed in:
+
+```js
+await fetch("http://localhost:3001/api/v1/insights/refresh", {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: "{}",
+}).then(response => response.json());
+```
+
+Dashboard and insight responses preserve their existing fields, with optional
+`insights.overviews` and `insights.generation` metadata. Overviews use the existing
+readings/chart renderer and include evidence windows. The BFF rejects invented
+plant IDs, unavailable metrics, unsupported evidence ranges, and assessed urgency
+for unmeasured plants. Failed refreshes retain the last successful insights and
+expose failure metadata. The frontend uses fixture-based presentation until the
+first generated result is available. Sample readings remain marked as mock even
+when insights are generated by Gemini.
+
+The cache, approvals, conversations, registry, and mock memory disappear on restart.
+This worker is for one BFF process; durable scheduling and backend idempotency are
+still integration work. See [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md) for the backend
+memory and mutation handoff.
 
 ## Backend and firmware protocol boundary
 
@@ -128,6 +205,5 @@ For durable authentication, inject a supported Better Auth database adapter via
 The default entry point refuses production execution until real backend and auth
 storage adapters have been configured. Demo seeding is disabled in production.
 
-See `../docs/FRONTEND_HANDOFF.md` for the frontend agent handoff written before
-implementation. Caching, Gemini scheduling, implementing resource mutations, and dynamic UI
-generation remain later work.
+Implementing backend mutations, durable scheduling/storage, and richer dynamic UI
+remain later work.

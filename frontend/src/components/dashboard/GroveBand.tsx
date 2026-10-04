@@ -26,7 +26,7 @@ function Fairy() {
   );
 }
 
-/** A small cut stone beside a mushroom that wants something: marked for "needs you", plain for "keep an eye on it". */
+/** A small cut stone beside a mushroom that wants something: marked for "calling for you", plain for "keep watch". */
 function Flag({ urgency }: { urgency: Urgency }) {
   return (
     <svg aria-hidden="true" viewBox="-10 -10 20 20" className="absolute top-7 right-2 size-5 sm:right-5">

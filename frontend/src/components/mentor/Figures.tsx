@@ -79,26 +79,30 @@ function Wizard() {
 }
 
 const DRAWN: Record<Persona, ReactNode> = { gnome: <Gnome />, wizard: <Wizard /> };
+const VIEW = "-80 -200 160 200";
+
+/** One mentor, whole and still. */
+export function MentorFigure({ persona, className }: { persona: Persona; className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox={VIEW} className={className}>
+      {DRAWN[persona]}
+    </svg>
+  );
+}
 
 /**
- * Both mentors, behind the top edge of whatever follows this in a positioned, isolated box.
- * Only `persona` is up; see mentor.css for how they change places.
+ * Both mentors in a window that is open at the top and sides and shut at the bottom. Only
+ * `persona` is up; the other has dropped out of the bottom. Give it a width, and pull whatever
+ * follows up over its bottom edge so the mentor stands behind that. See mentor.css.
  */
 export function MentorFigures({ persona, className }: { persona: Persona; className?: string }) {
   return (
-    <>
+    <div aria-hidden="true" className={cn("mentor-window pointer-events-none relative mx-auto aspect-4/5", className)}>
       {PERSONAS.map(id => (
-        <svg
-          key={id}
-          aria-hidden="true"
-          viewBox="-80 -200 160 200"
-          data-up={id === persona}
-          // Stands a little way down behind the board, so the board's uneven top edge is what cuts it off.
-          className={cn("mentor-figure pointer-events-none absolute inset-x-0 bottom-[calc(100%-1.25rem)] -z-10 mx-auto", className)}
-        >
+        <svg key={id} viewBox={VIEW} data-up={id === persona} className="mentor-figure absolute inset-0 size-full">
           <g className="mentor-idle">{DRAWN[id]}</g>
         </svg>
       ))}
-    </>
+    </div>
   );
 }

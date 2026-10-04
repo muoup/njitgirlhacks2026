@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { DATA_CHANGED } from "./data-events";
 
 export type Resource<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: unknown };
 
@@ -10,6 +11,11 @@ const LOADING = { status: "loading" } as const;
  */
 export function useResource<T>(load: (() => Promise<T>) | null, deps: readonly unknown[]) {
   const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const refresh = () => setAttempt(value => value + 1);
+    window.addEventListener(DATA_CHANGED, refresh);
+    return () => window.removeEventListener(DATA_CHANGED, refresh);
+  }, []);
   const key = JSON.stringify([load !== null, attempt, ...deps]);
   const [loaded, setLoaded] = useState<{ key: string; resource: Resource<T> } | null>(null);
 
