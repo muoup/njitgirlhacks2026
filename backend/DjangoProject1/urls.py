@@ -26,4 +26,3 @@ urlpatterns = [
    path('api/', include('myapp.api_urls')),
    path('myapp/', include('myapp.urls')),
 ]
-
